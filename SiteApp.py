@@ -3,98 +3,103 @@ from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import datetime, date
 
-# 1. Системные настройки (Apple High Quality)
-st.set_page_config(page_title="Task Core 2026", layout="wide")
+# 1. Системные настройки
+st.set_page_config(page_title="Pro Task Manager 2026", layout="wide")
 
 # 2. Подключение
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# 3. Маппинг ответственных (Персонализация)
+# 3. Конфигурация команды
 STAFF_CONFIG = {
-    "Программист": {"emoji": "👨‍💻", "color": "#60a5fa"},
-    "Дизайнер": {"emoji": "🎨", "color": "#f472b6"},
-    "SEO": {"emoji": "🚀", "color": "#fbbf24"},
-    "Алина": {"emoji": "👩‍🎨", "color": "#a78bfa"},
-    "Все": {"emoji": "🌍", "color": "#ffffff"}
+    "Программист": "👨‍💻",
+    "Дизайнер": "🎨",
+    "SEO": "🔍",
+    "Алина": "👩‍💼",
+    "Все": "🌐"
 }
 
-# 4. Премиальный CSS (Bento UI)
+# 4. Мощный CSS для UX и читаемости
 st.markdown("""
 <style>
-    /* Глубокий темный фон (OLED Black style) */
+    /* Фон приложения - глубокий черный */
     .stApp {
-        background-color: #000000;
-        color: #e2e8f0;
+        background-color: #000000 !important;
     }
 
-    /* Стилизация РОДНОГО контейнера под Бенто-бокс */
+    /* СТИЛЬ КАРТОЧКИ (БОКСА) */
     [data-testid="stVerticalBlockBorderWrapper"] {
-        background: #111111 !important;
-        border: 1px solid #222222 !important;
-        border-radius: 24px !important;
-        padding: 24px !important;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
-        margin-bottom: 16px !important;
-    }
-    
-    [data-testid="stVerticalBlockBorderWrapper"]:hover {
-        border-color: #444444 !important;
-        transform: translateY(-2px);
-        box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+        background-color: #1c1c1e !important; /* Цвет как в iOS dark mode */
+        border: 1px solid #3a3a3c !important; /* Четкая граница */
+        border-radius: 20px !important;
+        padding: 25px !important;
+        margin-bottom: 20px !important;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.4) !important;
     }
 
-    /* Типографика Apple Style */
-    .task-heading {
-        font-size: 1.6rem;
-        font-weight: 700;
+    /* Название задачи - Максимальный контраст */
+    .task-title-main {
+        font-size: 1.8rem !important;
+        font-weight: 800 !important;
+        color: #FFFFFF !important;
+        margin-bottom: 15px !important;
+        line-height: 1.2 !important;
+    }
+
+    /* Бейдж ответственного - чтобы сразу бросался в глаза */
+    .person-pill {
+        background: #2c2c2e;
+        padding: 6px 14px;
+        border-radius: 12px;
+        border: 1px solid #48484a;
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 1.1rem;
+        font-weight: 600;
         color: #ffffff;
-        letter-spacing: -0.02em;
-        margin-bottom: 12px;
     }
 
-    .meta-label {
-        color: #888888;
+    /* Информационные метки */
+    .label-text {
+        color: #8e8e93; /* Цвет Apple Secondary Text */
         font-size: 0.85rem;
+        font-weight: 600;
         text-transform: uppercase;
-        letter-spacing: 0.05em;
-        margin-bottom: 4px;
+        letter-spacing: 0.5px;
     }
 
-    .meta-value {
+    .value-text {
         color: #ffffff;
-        font-size: 1rem;
+        font-size: 1.05rem;
         font-weight: 500;
     }
 
-    /* Тюнинг вкладок и контролов */
-    div[data-testid="stSegmentedControl"] button {
-        border-radius: 12px !important;
-        background: #111111 !important;
-        color: #ffffff !important;
-        border: 1px solid #222222 !important;
-    }
-    
-    div[data-testid="stSegmentedControl"] button[aria-checked="true"] {
-        background: #ffffff !important;
-        color: #000000 !important;
-        font-weight: 700 !important;
+    /* Бейдж времени */
+    .time-badge {
+        background: rgba(255, 69, 58, 0.15);
+        color: #ff453a;
+        padding: 4px 10px;
+        border-radius: 8px;
+        font-weight: 700;
+        font-size: 0.9rem;
     }
 
-    /* Индикаторы времени */
-    .status-badge {
-        display: inline-flex;
-        align-items: center;
-        padding: 4px 12px;
-        border-radius: 100px;
-        font-size: 0.8rem;
-        font-weight: 600;
+    /* Тюнинг вкладок и кнопок */
+    .stTabs [data-baseweb="tab-list"] { gap: 10px; }
+    .stTabs [data-baseweb="tab"] {
+        background: #1c1c1e !important;
+        border-radius: 10px !important;
+        padding: 10px 20px !important;
+        color: #8e8e93 !important;
     }
-    .badge-urgent { background: rgba(239, 68, 68, 0.15); color: #f87171; }
-    .badge-normal { background: rgba(255, 255, 255, 0.05); color: #94a3b8; }
+    .stTabs [aria-selected="true"] {
+        background: #ffffff !important;
+        color: #000000 !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
-def get_days_diff(start_val):
+def get_days(start_val):
     try:
         if isinstance(start_val, (date, datetime)):
             d = start_val.date() if isinstance(start_val, datetime) else start_val
@@ -106,83 +111,89 @@ def get_days_diff(start_val):
 try:
     df = conn.read(ttl=0).dropna(how="all").fillna("")
     
-    st.markdown("### 🔘 Task Core Control")
-    
-    # Горизонтальный фильтр (Segmented Control)
-    team = list(STAFF_CONFIG.keys())
-    selected_team = st.segmented_control(
-        "Команда", options=team, 
-        format_func=lambda x: f"{STAFF_CONFIG[x]['emoji']} {x}",
+    st.markdown("# 🔘 Центр управления")
+
+    # Фильтр команды (Segmented)
+    staff_options = list(STAFF_CONFIG.keys())
+    sel_staff = st.segmented_control(
+        "Фильтр по команде:", 
+        options=staff_options,
+        format_func=lambda x: f"{STAFF_CONFIG[x]} {x}",
         default="Все"
     )
 
-    tabs = st.tabs(["🔥 Активные", "⏳ Очередь", "✅ Архив"])
-    statuses = ["В работе", "Запланировано", "Готово"]
+    tabs = st.tabs(["🔥 В работе", "⏳ План", "✅ Готово"])
+    st_list = ["В работе", "Запланировано", "Готово"]
 
     for i, tab in enumerate(tabs):
+        curr_st = st_list[i]
         with tab:
-            curr_status = statuses[i]
-            tasks = df[df['Статус'] == curr_status]
-            if selected_team != "Все":
-                tasks = tasks[tasks['Ответственный'] == selected_team]
+            tasks = df[df['Статус'] == curr_st]
+            if sel_staff != "Все":
+                tasks = tasks[tasks['Ответственный'] == sel_staff]
 
             if tasks.empty:
-                st.write("---")
-                st.caption("Задач в этой категории нет")
+                st.caption("Задач нет")
             else:
                 for idx, row in tasks.iterrows():
-                    days = get_days_diff(row['Начало'])
+                    days = get_days(row['Начало'])
                     person = row['Ответственный']
-                    config = STAFF_CONFIG.get(person, STAFF_CONFIG["Все"])
+                    emoji = STAFF_CONFIG.get(person, "👤")
                     
-                    # МОНОЛИТНЫЙ БОКС (Bento Window)
+                    # --- ГЛАВНЫЙ БОКС ЗАДАЧИ ---
                     with st.container(border=True):
-                        # Сетка внутри карточки
-                        c1, c2, c3, c4 = st.columns([0.45, 0.2, 0.15, 0.2])
+                        # 1 ряд: Заголовок
+                        st.markdown(f'<div class="task-title-main">{row["Задача"]}</div>', unsafe_allow_html=True)
+                        
+                        # 2 ряд: Основная информация
+                        c1, c2, c3 = st.columns([0.4, 0.3, 0.3])
                         
                         with c1:
-                            st.markdown(f'<div class="task-heading">{row["Задача"]}</div>', unsafe_allow_html=True)
-                            badge_class = "badge-urgent" if days > 7 else "badge-normal"
-                            label = "дн. в работе" if curr_status == "В работе" else "старт"
-                            st.markdown(f'<span class="status-badge {badge_class}">🕒 {days} {label}</span>', unsafe_allow_html=True)
-
+                            st.markdown('<p class="label-text">Ответственный</p>', unsafe_allow_html=True)
+                            st.markdown(f'<div class="person-pill">{emoji} {person}</div>', unsafe_allow_html=True)
+                        
                         with c2:
-                            st.markdown('<div class="meta-label">Исполнитель</div>', unsafe_allow_html=True)
-                            st.markdown(f'<div class="meta-value">{config["emoji"]} {person}</div>', unsafe_allow_html=True)
+                            st.markdown('<p class="label-text">Раздел сайта</p>', unsafe_allow_html=True)
+                            st.markdown(f'<p class="value-text">📍 {row["Раздел сайта"]}</p>', unsafe_allow_html=True)
                         
                         with c3:
-                            st.markdown('<div class="meta-label">Раздел</div>', unsafe_allow_html=True)
-                            st.markdown(f'<div class="meta-value">📍 {row["Раздел сайта"]}</div>', unsafe_allow_html=True)
+                            st.markdown('<p class="label-text">Тайминг</p>', unsafe_allow_html=True)
+                            if curr_st == "В работе":
+                                st.markdown(f'<span class="time-badge">🔥 {days} дн. в работе</span>', unsafe_allow_html=True)
+                            else:
+                                st.markdown(f'<p class="value-text">📅 {row["Начало"]}</p>', unsafe_allow_html=True)
 
-                        with c4:
-                            # Управление статусом в стиле Apple Action Menu
-                            st.markdown('<div class="meta-label">Действие</div>', unsafe_allow_html=True)
-                            new_st = st.selectbox(
-                                "Move to", statuses, 
-                                index=statuses.index(curr_status),
-                                key=f"act_{idx}",
+                        # 3 ряд: Кнопка смены статуса (выделена чертой)
+                        st.markdown("<div style='margin-top:20px; border-top:1px solid #3a3a3c; padding-top:15px;'></div>", unsafe_allow_html=True)
+                        
+                        ctrl_col1, ctrl_col2 = st.columns([0.7, 0.3])
+                        with ctrl_col2:
+                            new_val = st.selectbox(
+                                "Сменить статус:", st_list, 
+                                index=st_list.index(curr_st),
+                                key=f"sel_{idx}",
                                 label_visibility="collapsed"
                             )
-                            if new_st != curr_status:
-                                df.at[idx, 'Статус'] = new_st
+                            if new_val != curr_st:
+                                df.at[idx, 'Статус'] = new_val
                                 conn.update(data=df)
                                 st.rerun()
 
 except Exception as e:
-    st.error(f"System Link Error: {e}")
+    st.error(f"Ошибка связи: {e}")
 
-# Сайдбар (Добавление)
+# Сайдбар для новых задач
 with st.sidebar:
-    st.markdown("### ⊕ Create Task")
-    with st.form("apple_form", clear_on_submit=True):
-        f_task = st.text_input("Название задачи")
-        f_sec = st.text_input("Раздел сайта")
-        f_who = st.selectbox("Ответственный", [k for k in STAFF_CONFIG.keys() if k != "Все"])
-        if st.form_submit_button("Подтвердить"):
-            new_data = {
-                "Раздел сайта": f_sec, "Задача": f_task, "Ответственный": f_who, 
+    st.header("✚ Новая задача")
+    with st.form("add_form"):
+        nt_task = st.text_input("Название задачи")
+        nt_sec = st.text_input("Раздел")
+        nt_who = st.selectbox("Кто делает?", [k for k in STAFF_CONFIG.keys() if k != "Все"])
+        if st.form_submit_button("Создать в Плане"):
+            new_r = {
+                "Раздел сайта": nt_sec, "Задача": nt_task, "Ответственный": nt_who, 
                 "Начало": date.today().strftime("%d.%m.%Y"), "Статус": "Запланировано"
             }
-            upd = pd.concat([df, pd.DataFrame([new_data])], ignore_index=True)
+            upd = pd.concat([df, pd.DataFrame([new_r])], ignore_index=True)
             conn.update(data=upd)
             st.rerun()
