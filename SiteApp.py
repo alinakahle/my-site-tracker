@@ -3,99 +3,100 @@ from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import datetime, date
 
-# 1. Системные настройки
-st.set_page_config(page_title="Pro Task Manager 2026", layout="wide")
+# 1. Настройка премиального светлого интерфейса
+st.set_page_config(page_title="Task Manager Studio", layout="wide")
 
 # 2. Подключение
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# 3. Конфигурация команды
-STAFF_CONFIG = {
-    "Программист": "👨‍💻",
-    "Дизайнер": "🎨",
-    "SEO": "🔍",
-    "Алина": "👩‍💼",
-    "Все": "🌐"
+# 3. Цветовая схема сотрудников (High Visibility)
+STAFF_THEME = {
+    "Программист": {"emoji": "👨‍💻", "bg": "#EBF5FF", "text": "#007AFF"},
+    "Дизайнер": {"emoji": "🎨", "bg": "#FFF0F6", "text": "#D63384"},
+    "SEO": {"emoji": "🔍", "bg": "#FFF9DB", "text": "#F59F00"},
+    "Алина": {"emoji": "👩‍💼", "bg": "#F3F0FF", "text": "#7048E8"},
+    "Все": {"emoji": "🌐", "bg": "#F8F9FA", "text": "#212529"}
 }
 
-# 4. Мощный CSS для UX и читаемости
-st.markdown("""
+# 4. CSS: Чистый светлый дизайн (Apple Style 2026)
+st.markdown(f"""
 <style>
-    /* Фон приложения - глубокий черный */
-    .stApp {
-        background-color: #000000 !important;
-    }
+    /* Фон приложения - мягкий светлый */
+    .stApp {{
+        background-color: #F5F5F7 !important;
+        color: #1D1D1F !important;
+    }}
 
-    /* СТИЛЬ КАРТОЧКИ (БОКСА) */
-    [data-testid="stVerticalBlockBorderWrapper"] {
-        background-color: #1c1c1e !important; /* Цвет как в iOS dark mode */
-        border: 1px solid #3a3a3c !important; /* Четкая граница */
-        border-radius: 20px !important;
-        padding: 25px !important;
+    /* СТИЛЬ КАРТОЧКИ: Белый монолит */
+    [data-testid="stVerticalBlockBorderWrapper"] {{
+        background-color: #FFFFFF !important;
+        border: 1px solid #D2D2D7 !important;
+        border-radius: 18px !important;
+        padding: 0px !important; /* Убираем падинги, чтобы сделать кастомные зоны */
         margin-bottom: 20px !important;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.4) !important;
-    }
+        box-shadow: 0 2px 4px rgba(0,0,0,0.02) !important;
+        overflow: hidden !important;
+    }}
 
-    /* Название задачи - Максимальный контраст */
-    .task-title-main {
-        font-size: 1.8rem !important;
-        font-weight: 800 !important;
-        color: #FFFFFF !important;
-        margin-bottom: 15px !important;
-        line-height: 1.2 !important;
-    }
+    /* Внутренняя область контента */
+    .card-content {{
+        padding: 24px;
+    }}
 
-    /* Бейдж ответственного - чтобы сразу бросался в глаза */
-    .person-pill {
-        background: #2c2c2e;
-        padding: 6px 14px;
-        border-radius: 12px;
-        border: 1px solid #48484a;
+    /* Заголовок задачи */
+    .task-title {{
+        font-size: 1.5rem !important;
+        font-weight: 700 !important;
+        color: #1D1D1F !important;
+        margin-bottom: 16px !important;
+        line-height: 1.3;
+    }}
+
+    /* Бейдж ответственного */
+    .staff-badge {{
         display: inline-flex;
         align-items: center;
-        gap: 10px;
-        font-size: 1.1rem;
+        padding: 6px 12px;
+        border-radius: 10px;
         font-weight: 600;
-        color: #ffffff;
-    }
+        font-size: 0.95rem;
+        margin-right: 12px;
+    }}
 
-    /* Информационные метки */
-    .label-text {
-        color: #8e8e93; /* Цвет Apple Secondary Text */
-        font-size: 0.85rem;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-
-    .value-text {
-        color: #ffffff;
-        font-size: 1.05rem;
-        font-weight: 500;
-    }
-
-    /* Бейдж времени */
-    .time-badge {
-        background: rgba(255, 69, 58, 0.15);
-        color: #ff453a;
-        padding: 4px 10px;
-        border-radius: 8px;
-        font-weight: 700;
+    /* Инфо-строка */
+    .info-row {{
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        color: #86868B;
         font-size: 0.9rem;
-    }
+        margin-top: 10px;
+    }}
 
-    /* Тюнинг вкладок и кнопок */
-    .stTabs [data-baseweb="tab-list"] { gap: 10px; }
-    .stTabs [data-baseweb="tab"] {
-        background: #1c1c1e !important;
-        border-radius: 10px !important;
-        padding: 10px 20px !important;
-        color: #8e8e93 !important;
-    }
-    .stTabs [aria-selected="true"] {
-        background: #ffffff !important;
-        color: #000000 !important;
-    }
+    /* Зона управления (Нижняя часть карточки) */
+    .control-zone {{
+        background-color: #FBFBFD;
+        border-top: 1px solid #D2D2D7;
+        padding: 12px 24px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }}
+
+    /* Тюнинг вкладок */
+    .stTabs [data-baseweb="tab-list"] {{ background: transparent !important; }}
+    .stTabs [data-baseweb="tab"] {{
+        font-weight: 600 !important;
+        color: #86868B !important;
+        border-bottom: 2px solid transparent !important;
+    }}
+    .stTabs [aria-selected="true"] {{
+        color: #007AFF !important;
+        border-bottom: 2px solid #007AFF !important;
+    }}
+    
+    /* Скрываем лишние заголовки Streamlit внутри карточек */
+    .stSelectbox label {{ display: none !important; }}
 </style>
 """, unsafe_allow_html=True)
 
@@ -111,89 +112,89 @@ def get_days(start_val):
 try:
     df = conn.read(ttl=0).dropna(how="all").fillna("")
     
-    st.markdown("# 🔘 Центр управления")
+    st.title("📋 Управление проектами")
 
-    # Фильтр команды (Segmented)
-    staff_options = list(STAFF_CONFIG.keys())
+    # Фильтр команды
+    staff_names = list(STAFF_THEME.keys())
     sel_staff = st.segmented_control(
-        "Фильтр по команде:", 
-        options=staff_options,
-        format_func=lambda x: f"{STAFF_CONFIG[x]} {x}",
+        "Команда", options=staff_names,
+        format_func=lambda x: f"{STAFF_THEME[x]['emoji']} {x}",
         default="Все"
     )
 
-    tabs = st.tabs(["🔥 В работе", "⏳ План", "✅ Готово"])
-    st_list = ["В работе", "Запланировано", "Готово"]
+    tabs = st.tabs(["🕒 В работе", "📅 План", "✅ Готово"])
+    st_options = ["В работе", "Запланировано", "Готово"]
 
     for i, tab in enumerate(tabs):
-        curr_st = st_list[i]
+        curr_status = st_options[i]
         with tab:
-            tasks = df[df['Статус'] == curr_st]
+            tasks = df[df['Статус'] == curr_status]
             if sel_staff != "Все":
                 tasks = tasks[tasks['Ответственный'] == sel_staff]
 
             if tasks.empty:
-                st.caption("Задач нет")
+                st.info("В этой категории пока нет задач")
             else:
                 for idx, row in tasks.iterrows():
                     days = get_days(row['Начало'])
                     person = row['Ответственный']
-                    emoji = STAFF_CONFIG.get(person, "👤")
+                    theme = STAFF_THEME.get(person, STAFF_THEME["Все"])
                     
-                    # --- ГЛАВНЫЙ БОКС ЗАДАЧИ ---
+                    # КОРПУС КАРТОЧКИ
                     with st.container(border=True):
-                        # 1 ряд: Заголовок
-                        st.markdown(f'<div class="task-title-main">{row["Задача"]}</div>', unsafe_allow_html=True)
-                        
-                        # 2 ряд: Основная информация
-                        c1, c2, c3 = st.columns([0.4, 0.3, 0.3])
-                        
-                        with c1:
-                            st.markdown('<p class="label-text">Ответственный</p>', unsafe_allow_html=True)
-                            st.markdown(f'<div class="person-pill">{emoji} {person}</div>', unsafe_allow_html=True)
-                        
-                        with c2:
-                            st.markdown('<p class="label-text">Раздел сайта</p>', unsafe_allow_html=True)
-                            st.markdown(f'<p class="value-text">📍 {row["Раздел сайта"]}</p>', unsafe_allow_html=True)
-                        
-                        with c3:
-                            st.markdown('<p class="label-text">Тайминг</p>', unsafe_allow_html=True)
-                            if curr_st == "В работе":
-                                st.markdown(f'<span class="time-badge">🔥 {days} дн. в работе</span>', unsafe_allow_html=True)
-                            else:
-                                st.markdown(f'<p class="value-text">📅 {row["Начало"]}</p>', unsafe_allow_html=True)
+                        # 1. Секция контента
+                        st.markdown(f"""
+                        <div class="card-content">
+                            <div class="task-title">{row['Задача']}</div>
+                            <div style="display: flex; align-items: center;">
+                                <span class="staff-badge" style="background:{theme['bg']}; color:{theme['text']};">
+                                    {theme['emoji']} {person}
+                                </span>
+                                <span style="color: #86868B; font-size: 0.9rem;">📍 {row['Раздел сайта']}</span>
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
 
-                        # 3 ряд: Кнопка смены статуса (выделена чертой)
-                        st.markdown("<div style='margin-top:20px; border-top:1px solid #3a3a3c; padding-top:15px;'></div>", unsafe_allow_html=True)
+                        # 2. Секция управления (Статус жестко привязан к карточке)
+                        # Используем колонки Streamlit внутри контейнера для селектора
+                        st.markdown("<div class='control-zone'>", unsafe_allow_html=True)
                         
-                        ctrl_col1, ctrl_col2 = st.columns([0.7, 0.3])
-                        with ctrl_col2:
-                            new_val = st.selectbox(
-                                "Сменить статус:", st_list, 
-                                index=st_list.index(curr_st),
-                                key=f"sel_{idx}",
-                                label_visibility="collapsed"
+                        c_info, c_select = st.columns([0.6, 0.4])
+                        with c_info:
+                            if curr_status == "В работе":
+                                st.markdown(f"**🔥 {days} дн. в процессе**")
+                            else:
+                                st.markdown(f"📅 С: {row['Начало']}")
+                        
+                        with c_select:
+                            # Селектор теперь физически находится ВНУТРИ белой рамки задачи
+                            new_st = st.selectbox(
+                                "Статус", st_options,
+                                index=st_options.index(curr_status),
+                                key=f"status_{idx}"
                             )
-                            if new_val != curr_st:
-                                df.at[idx, 'Статус'] = new_val
+                            if new_st != curr_status:
+                                df.at[idx, 'Статус'] = new_st
                                 conn.update(data=df)
                                 st.rerun()
+                        
+                        st.markdown("</div>", unsafe_allow_html=True)
 
 except Exception as e:
-    st.error(f"Ошибка связи: {e}")
+    st.error(f"Ошибка системы: {e}")
 
-# Сайдбар для новых задач
+# Сайдбар для ввода
 with st.sidebar:
-    st.header("✚ Новая задача")
-    with st.form("add_form"):
-        nt_task = st.text_input("Название задачи")
-        nt_sec = st.text_input("Раздел")
-        nt_who = st.selectbox("Кто делает?", [k for k in STAFF_CONFIG.keys() if k != "Все"])
-        if st.form_submit_button("Создать в Плане"):
-            new_r = {
-                "Раздел сайта": nt_sec, "Задача": nt_task, "Ответственный": nt_who, 
+    st.header("✨ Создать задачу")
+    with st.form("new_task"):
+        f_task = st.text_input("Что нужно сделать?")
+        f_sec = st.text_input("Раздел (например, Шапка)")
+        f_who = st.selectbox("Кто исполнитель?", [k for k in STAFF_THEME.keys() if k != "Все"])
+        if st.form_submit_button("Добавить в очередь"):
+            new_data = {
+                "Раздел сайта": f_sec, "Задача": f_task, "Ответственный": f_who,
                 "Начало": date.today().strftime("%d.%m.%Y"), "Статус": "Запланировано"
             }
-            upd = pd.concat([df, pd.DataFrame([new_r])], ignore_index=True)
+            upd = pd.concat([df, pd.DataFrame([new_data])], ignore_index=True)
             conn.update(data=upd)
             st.rerun()
