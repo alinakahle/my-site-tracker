@@ -3,122 +3,123 @@ from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import datetime, date
 
-st.set_page_config(page_title="Site Tracker Pro", layout="wide")
+st.set_page_config(page_title="Site Task Manager", layout="wide")
 
 # Подключение
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# Стилизация (улучшенная)
+# Современный лаконичный стиль
 st.markdown("""
 <style>
-    .stApp { background-color: #0d1117; color: #e6edf3; }
-    .task-card { 
-        background-color: #161b22; 
-        border: 1px solid #30363d; 
-        border-radius: 10px; 
-        padding: 15px; 
-        margin-bottom: 12px;
-        min-height: 110px;
+    .stApp { background-color: #f8f9fa; color: #212529; }
+    [data-testid="stSidebar"] { background-color: #ffffff; border-right: 1px solid #e0e0e0; }
+    
+    /* Стили строк списка */
+    .task-row {
+        background: white;
+        border-radius: 8px;
+        padding: 12px 20px;
+        margin-bottom: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border: 1px solid #eee;
+        transition: all 0.2s;
     }
-    .task-title { font-weight: bold; font-size: 1.1em; color: #58a6ff; margin-bottom: 5px; line-height: 1.2; }
-    .task-meta { font-size: 0.85em; color: #8b949e; margin-top: 4px; }
-    .badge { 
-        background: rgba(56, 139, 253, 0.1); color: #58a6ff; 
-        padding: 2px 8px; border-radius: 6px; font-size: 0.8em; 
-        float: right; border: 1px solid rgba(56, 139, 253, 0.3);
+    .task-row:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.05); border-color: #d0d0d0; }
+    
+    .task-main { flex-grow: 1; }
+    .task-title { font-weight: 600; font-size: 1.05rem; color: #1a1c1e; }
+    .task-sub { font-size: 0.85rem; color: #6c757d; margin-top: 2px; }
+    
+    /* Индикаторы */
+    .status-pill {
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 700;
+        text-transform: uppercase;
     }
-    .badge-done { 
-        background: rgba(45, 196, 77, 0.1); color: #7ee787; 
-        border: 1px solid rgba(45, 196, 77, 0.3);
+    .status-todo { background: #e9ecef; color: #495057; }
+    .status-doing { background: #e7f5ff; color: #007bff; }
+    .status-done { background: #ebfbee; color: #40c057; }
+    
+    .person-tag { 
+        background: #f1f3f5; 
+        padding: 2px 8px; 
+        border-radius: 4px; 
+        font-weight: 500; 
+        color: #495057;
+        margin-left: 10px;
     }
-    h3 { border-bottom: 2px solid #30363d; padding-bottom: 10px; color: #f0f6fc; margin-top: 20px; }
 </style>
 """, unsafe_allow_html=True)
 
-def calculate_days(start_val):
+def get_days(start_val):
     try:
-        # Пытаемся обработать разные форматы дат
-        if isinstance(start_val, (date, datetime)):
-            start_date = start_val.date() if isinstance(start_val, datetime) else start_val
-        else:
-            start_date = datetime.strptime(str(start_val).strip(), "%d.%m.%Y").date()
-        
-        delta = (date.today() - start_date).days
-        return max(0, delta)
-    except:
-        return None
+        start_date = datetime.strptime(str(start_val), "%d.%m.%Y").date() if isinstance(start_val, str) else start_val
+        return (date.today() - start_date).days
+    except: return 0
 
 try:
-    # Чтение данных
     df = conn.read(ttl=0).dropna(how="all").fillna("")
     
-    st.title("🎯 Мониторинг задач (Kanban)")
+    st.title("📋 Управление задачами")
+    
+    # Группировка по статусам
+    tabs = st.tabs(["⚡ В работе", "⏳ Запланировано", "✅ Готово"])
+    status_map = {"В работе": tabs[0], "Запланировано": tabs[1], "Готово": tabs[2]}
+    styles = {"В работе": "doing", "Запланировано": "todo", "Готово": "done"}
 
-    stages = ["Запланировано", "В работе", "Готово"]
-    cols = st.columns(3)
-
-    for i, stage in enumerate(stages):
-        with cols[i]:
-            st.markdown(f"### {stage}")
-            
-            # Фильтруем задачи
-            tasks = df[df['Статус'] == stage]
+    for status_name, tab in status_map.items():
+        with tab:
+            tasks = df[df['Статус'] == status_name]
+            if tasks.empty:
+                st.info(f"Задач в статусе '{status_name}' нет")
             
             for idx, row in tasks.iterrows():
-                # Логика бейджа времени
-                time_badge = ""
-                days = calculate_days(row['Начало'])
+                days = get_days(row['Начало'])
+                time_info = f" • 🔥 {days} дн." if status_name == "В работе" else ""
                 
-                if stage == "В работе" and days is not None:
-                    time_badge = f'<span class="badge">🔥 {days} дн. в работе</span>'
-                elif stage == "Готово" and days is not None:
-                    time_badge = f'<span class="badge badge-done">✅ за {days} дн.</span>'
+                # Чистый вывод строки задачи
+                col_text, col_action = st.columns([0.8, 0.2])
                 
-                # РЕНДЕРИНГ (теперь абсолютно одинаковый для всех стадий)
-                st.markdown(f"""
-                <div class="task-card">
-                    {time_badge}
-                    <div class="task-title">{row['Задача']}</div>
-                    <div class="task-meta">📍 {row['Раздел сайта']}</div>
-                    <div class="task-meta">👤 {row['Ответственный']} | 📅 {row['Начало']}</div>
-                </div>
-                """, unsafe_allow_html=True)
+                with col_text:
+                    st.markdown(f"""
+                    <div class="task-row">
+                        <div class="task-main">
+                            <div class="task-title">{row['Задача']}</div>
+                            <div class="task-sub">
+                                📍 {row['Раздел сайта']} | 📅 {row['Начало']}{time_info}
+                                <span class="person-tag">👤 {row['Ответственный']}</span>
+                            </div>
+                        </div>
+                        <div class="status-pill status-{styles[status_name]}">{status_name}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
                 
-                # Кнопка смены статуса
-                with st.expander("⚙️ Изменить статус"):
-                    new_status = st.selectbox(
-                        "Переместить в:", 
-                        stages, 
-                        index=stages.index(stage), 
-                        key=f"status_{idx}"
-                    )
-                    if st.button("Сохранить", key=f"save_{idx}"):
-                        if new_status != stage:
-                            df.at[idx, 'Статус'] = new_status
-                            conn.update(data=df)
-                            st.rerun()
+                with col_action:
+                    # Удобное управление
+                    next_status = st.selectbox("Сменить на:", ["Запланировано", "В работе", "Готово"], 
+                                             index=["Запланировано", "В работе", "Готово"].index(status_name),
+                                             key=f"sel_{idx}")
+                    if next_status != status_name:
+                        df.at[idx, 'Статус'] = next_status
+                        conn.update(data=df)
+                        st.rerun()
 
 except Exception as e:
-    st.error(f"Ошибка данных: {e}")
+    st.error(f"Ошибка: {e}")
 
 # Боковая панель
 with st.sidebar:
-    st.header("✨ Новая задача")
-    with st.form("new_task_form", clear_on_submit=True):
-        f_sec = st.text_input("Раздел сайта")
-        f_task = st.text_area("Задача")
-        f_who = st.selectbox("Ответственный", ["Программист", "Дизайнер", "SEO", "Алина"])
-        
+    st.header("➕ Новая задача")
+    with st.form("add"):
+        s = st.text_input("Раздел")
+        t = st.text_input("Задача")
+        p = st.selectbox("Кто", ["Программист", "Дизайнер", "SEO", "Алина"])
         if st.form_submit_button("Создать"):
-            new_row = {
-                "Раздел сайта": f_sec,
-                "Задача": f_task,
-                "Ответственный": f_who,
-                "Начало": date.today().strftime("%d.%m.%Y"),
-                "Дедлайн": "",
-                "дней в работе": "",
-                "Статус": "Запланировано"
-            }
-            updated_df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
-            conn.update(data=updated_df)
+            new = {"Раздел сайта": s, "Задача": t, "Ответственный": p, "Начало": date.today().strftime("%d.%m.%Y"), "Статус": "Запланировано"}
+            updated = pd.concat([df, pd.DataFrame([new])], ignore_index=True)
+            conn.update(data=updated)
             st.rerun()
