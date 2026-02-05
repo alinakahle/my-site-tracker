@@ -53,6 +53,14 @@ st.markdown("""
 
     div[data-testid="stSegmentedControl"] button { background: white !important; border: 1px solid #D2D2D7 !important; }
     div[data-testid="stSegmentedControl"] button[aria-checked="true"] { background: #007AFF !important; color: white !important; }
+
+    /* Стили для метрик в сайдбаре */
+    [data-testid="stMetric"] {
+        background-color: #F8F9FA;
+        padding: 10px;
+        border-radius: 10px;
+        border: 1px solid #E0E0E0;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -63,19 +71,33 @@ def get_time_styles(days):
     return "t-red", "b-red"
 
 try:
+    # Загрузка данных
     df = conn.read(ttl=0).dropna(how="all").fillna("")
     
-    # --- SIDEBAR (Создание задачи с датой) ---
+    # --- SIDEBAR (Статистика + Создание) ---
     with st.sidebar:
+        st.markdown("## 📊 Статистика проекта")
+        # Считаем количество задач
+        count_working = len(df[df['Статус'] == "В работе"])
+        count_planned = len(df[df['Статус'] == "Запланировано"])
+        count_done = len(df[df['Статус'] == "Готово"])
+
+        with st.container(border=True):
+            col_m1, col_m2 = st.columns(2)
+            with col_m1:
+                st.metric("🔥 В работе", count_working)
+                st.metric("✅ Готово", count_done)
+            with col_m2:
+                st.metric("⏳ План", count_planned)
+                st.metric("📦 Всего", len(df))
+
+        st.markdown("---")
         st.markdown("## ✨ Новая задача")
         with st.form("add_task_form", clear_on_submit=True):
             new_title = st.text_input("Название задачи")
             new_sec = st.text_input("Раздел сайта")
             new_who = st.selectbox("Исполнитель", [k for k in STAFF_CONFIG.keys() if k != "Все"])
-            
-            # НОВОЕ ПОЛЕ: Выбор даты постановки задачи
             new_date = st.date_input("Когда поставлена?", value=date.today())
-            
             submit = st.form_submit_button("Добавить в план", use_container_width=True)
             
             if submit and new_title:
@@ -83,12 +105,12 @@ try:
                     "Раздел сайта": new_sec, 
                     "Задача": new_title, 
                     "Ответственный": new_who,
-                    "Начало": new_date.strftime("%d.%m.%Y"), # Сохраняем выбранную дату
+                    "Начало": new_date.strftime("%d.%m.%Y"),
                     "Статус": "Запланировано"
                 }
                 df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
                 conn.update(data=df)
-                st.toast(f"Задача добавлена с {new_date.strftime('%d.%m.%Y')}", icon="✅")
+                st.toast(f"Задача добавлена!", icon="✅")
                 st.rerun()
 
     # --- MAIN UI ---
