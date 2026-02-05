@@ -8,16 +8,10 @@ st.set_page_config(page_title="Site Manager Liquid", layout="wide")
 # Подключение
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# Словарь эмодзи для ответственных
-STAFF_EMOJI = {
-    "Программист": "💻",
-    "Дизайнер": "🎨",
-    "SEO": "🔍",
-    "Алина": "👩‍💼",
-    "Все": "🌐"
-}
+# Словарь эмодзи
+STAFF_EMOJI = {"Программист": "💻", "Дизайнер": "🎨", "SEO": "🔍", "Алина": "👩‍💼", "Все": "🌐"}
 
-# Дизайн: Каждая задача в отдельном "окне" (Glass Window)
+# Дизайн: Исправленные монолитные окна
 st.markdown("""
 <style>
     .stApp {
@@ -25,63 +19,61 @@ st.markdown("""
         color: #f1f5f9;
     }
 
-    /* Стиль отдельного окна для задачи */
+    /* Монолитное окно - теперь это ОДИН контейнер */
     .task-window {
-        background: rgba(255, 255, 255, 0.03);
-        backdrop-filter: blur(20px);
-        -webkit-backdrop-filter: blur(20px);
-        border: 1px solid rgba(255, 255, 255, 0.12);
+        background: rgba(255, 255, 255, 0.05);
+        backdrop-filter: blur(25px);
+        -webkit-backdrop-filter: blur(25px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
         border-radius: 24px;
         padding: 30px;
-        margin-bottom: 30px; /* Большой отступ между окнами */
-        box-shadow: 0 15px 35px rgba(0,0,0,0.5);
+        margin-bottom: 25px;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.5);
     }
 
-    /* Заголовок задачи - крупный и четкий */
-    .task-header-text {
-        font-size: 1.7rem;
+    .task-title {
+        font-size: 1.8rem;
         font-weight: 800;
         color: #ffffff;
-        margin: 0;
-        letter-spacing: -0.5px;
+        margin-bottom: 20px;
         line-height: 1.2;
     }
 
-    /* Информационная панель внизу окна */
-    .task-info-bar {
-        margin-top: 25px;
-        padding-top: 20px;
-        border-top: 1px solid rgba(255, 255, 255, 0.08);
+    .task-footer {
         display: flex;
         justify-content: flex-start;
-        gap: 35px;
+        align-items: center;
+        gap: 25px;
+        padding-top: 20px;
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
         color: #94a3b8;
         font-size: 1.1rem;
     }
 
-    .info-block { display: flex; align-items: center; gap: 8px; }
-    .person-name { color: #ffffff; font-weight: 700; }
+    .person-tag {
+        background: rgba(255, 255, 255, 0.1);
+        padding: 5px 15px;
+        border-radius: 12px;
+        color: #fff;
+        font-weight: 600;
+    }
+
     .fire-status { color: #fb7185; font-weight: 800; }
 
-    /* Исправление кнопок фильтра */
+    /* Исправление отображения фильтров */
     div[data-testid="stSegmentedControl"] button {
         background: rgba(255, 255, 255, 0.05) !important;
         color: #ffffff !important;
-        border: 1px solid rgba(255, 255, 255, 0.2) !important;
-        font-size: 1rem !important;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
     }
     div[data-testid="stSegmentedControl"] button[aria-checked="true"] {
         background: #3b82f6 !important;
-        border-color: #60a5fa !important;
     }
-
-    /* Кастомизация Popover (кнопка статуса) */
-    div[data-testid="stPopover"] > button {
-        background: rgba(255, 255, 255, 0.07) !important;
-        color: #ffffff !important;
-        border: 1px solid rgba(255, 255, 255, 0.2) !important;
-        border-radius: 14px !important;
-        font-weight: 600 !important;
+    
+    /* Стилизация выпадающего списка выбора статуса, чтобы он не ломал верстку */
+    .stSelectbox div[data-baseweb="select"] {
+        background-color: rgba(255, 255, 255, 0.05) !important;
+        border-radius: 12px !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -98,84 +90,83 @@ def get_days(start_val):
 try:
     df = conn.read(ttl=0).dropna(how="all").fillna("")
     
-    st.markdown("# 🛸 Управление проектами")
+    st.markdown("# 🛸 Project Dashboard")
     
     staff_list = ['Все', 'Программист', 'Дизайнер', 'SEO', 'Алина']
-    tabs = st.tabs(["🔥 В работе", "⏳ В планах", "💎 Завершено"])
+    tabs = st.tabs(["🔥 В работе", "⏳ План", "💎 Готово"])
     status_list = ["В работе", "Запланировано", "Готово"]
 
     for i, tab in enumerate(tabs):
         curr_status = status_list[i]
         with tab:
-            # Горизонтальный фильтр с эмодзи
-            filter_options = {p: f"{STAFF_EMOJI.get(p, '')} {p}" for p in staff_list}
+            # Горизонтальный фильтр
             sel_person = st.segmented_control(
-                "Фильтр команды:", 
-                options=staff_list, 
-                format_func=lambda x: filter_options[x],
-                default="Все", 
-                key=f"filter_{curr_status}"
+                "Фильтр:", options=staff_list, 
+                format_func=lambda x: f"{STAFF_EMOJI.get(x, '')} {x}",
+                default="Все", key=f"f_{curr_status}"
             )
-            
-            st.write("") # Пространство
             
             tasks = df[df['Статус'] == curr_status]
             if sel_person != "Все":
                 tasks = tasks[tasks['Ответственный'] == sel_person]
             
-            if tasks.empty:
-                st.info("В этом разделе пока нет задач")
-            else:
-                for idx, row in tasks.iterrows():
-                    days = get_days(row['Начало'])
-                    person = row['Ответственный']
-                    emoji = STAFF_EMOJI.get(person, "👤")
-                    
-                    # Начало отдельного "Окна" задачи
+            for idx, row in tasks.iterrows():
+                days = get_days(row['Начало'])
+                person = row['Ответственный']
+                emoji = STAFF_EMOJI.get(person, "👤")
+                
+                # ЧТОБЫ НИЧЕГО НЕ ВЫЛЕТАЛО:
+                # Мы создаем контейнер и ВСЁ содержимое пишем внутри него через columns
+                with st.container():
+                    # Вот это и есть наше "Стеклянное окно"
+                    # Мы имитируем его через markdown ПЕРЕД контентом и ПОСЛЕ
                     st.markdown(f'<div class="task-window">', unsafe_allow_html=True)
                     
-                    # Верхняя часть: Заголовок и кнопка
-                    t_col1, t_col2 = st.columns([0.8, 0.2])
-                    with t_col1:
-                        st.markdown(f'<p class="task-header-text">{row["Задача"]}</p>', unsafe_allow_html=True)
-                    with t_col2:
-                        with st.popover(curr_status, use_container_width=True):
-                            st.write("📍 Сменить этап:")
-                            new_st = st.radio("Куда:", status_list, 
-                                            index=status_list.index(curr_status),
-                                            key=f"m_{idx}")
-                            if new_st != curr_status:
-                                df.at[idx, 'Статус'] = new_st
-                                conn.update(data=df)
-                                st.rerun()
+                    # Разделяем на заголовок и кнопку смены статуса
+                    col_title, col_action = st.columns([0.75, 0.25])
                     
-                    # Нижняя панель с мета-данными
-                    time_html = f'<div class="info-block"><span class="fire-status">🔥 {days} дн. в работе</span></div>' if curr_status == "В работе" else f'<div class="info-block">📅 {row["Начало"]}</div>'
+                    with col_title:
+                        st.markdown(f'<div class="task-title">{row["Задача"]}</div>', unsafe_allow_html=True)
+                    
+                    with col_action:
+                        # Используем компактный selectbox вместо popover для стабильности
+                        new_st = st.selectbox(
+                            "Изменить статус:", status_list, 
+                            index=status_list.index(curr_status),
+                            key=f"move_{idx}",
+                            label_visibility="collapsed"
+                        )
+                        if new_st != curr_status:
+                            df.at[idx, 'Статус'] = new_st
+                            conn.update(data=df)
+                            st.rerun()
+
+                    # Футер с данными
+                    time_html = f'<span class="fire-status">🔥 {days} дн.</span>' if curr_status == "В работе" else f"📅 {row['Начало']}"
                     
                     st.markdown(f"""
-                        <div class="task-info-bar">
-                            <div class="info-block"><span style="font-size:1.4rem;">{emoji}</span> <span class="person-name">{person}</span></div>
-                            <div class="info-block">📍 {row['Раздел сайта']}</div>
-                            {time_html}
+                        <div class="task-footer">
+                            <div class="person-tag">{emoji} {person}</div>
+                            <div>📍 {row['Раздел сайта']}</div>
+                            <div>{time_html}</div>
                         </div>
-                    </div>
                     """, unsafe_allow_html=True)
+                    
+                    st.markdown('</div>', unsafe_allow_html=True)
 
 except Exception as e:
-    st.error(f"Ошибка чтения данных: {e}")
+    st.error(f"Ошибка: {e}")
 
 # Сайдбар
 with st.sidebar:
     st.header("✨ Новая задача")
-    with st.form("add_task", clear_on_submit=True):
-        f_sec = st.text_input("Раздел сайта")
-        f_task = st.text_area("Что нужно сделать?")
-        f_who = st.selectbox("Кто ответственный?", staff_list[1:])
-        if st.form_submit_button("Создать задачу ✨"):
-            new_row = {
-                "Раздел сайта": f_sec, "Задача": f_task, "Ответственный": f_who, 
-                "Начало": date.today().strftime("%d.%m.%Y"), "Статус": "Запланировано"
-            }
-            upd = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+    with st.form("add"):
+        f_sec = st.text_input("Раздел")
+        f_task = st.text_area("Задача")
+        f_who = st.selectbox("Кто", staff_list[1:])
+        if st.form_submit_button("Создать"):
+            new = {"Раздел сайта": f_sec, "Задача": f_task, "Ответственный": f_who, 
+                   "Начало": date.today().strftime("%d.%m.%Y"), "Статус": "Запланировано"}
+            upd = pd.concat([df, pd.DataFrame([new])], ignore_index=True)
             conn.update(data=upd)
             st.rerun()
