@@ -3,96 +3,76 @@ from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import datetime, date
 
-# 1. Настройка страницы
+# Настройка страницы
 st.set_page_config(page_title="Site Manager Liquid", layout="wide")
 
-# 2. Подключение
+# Подключение
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# 3. Дизайн: Dark Liquid Glass
+# Улучшенный Liquid Glass Дизайн
 st.markdown("""
 <style>
-    /* Основной фон - темный глубокий градиент */
+    /* Глубокий темный фон */
     .stApp {
         background: radial-gradient(circle at top right, #1e293b, #0f172a, #020617);
         color: #f1f5f9;
     }
 
-    /* Эффект Liquid Glass для карточек */
-    .task-card {
-        background: rgba(255, 255, 255, 0.03);
-        backdrop-filter: blur(12px) saturate(180%);
-        -webkit-backdrop-filter: blur(12px) saturate(180%);
-        border: 1px solid rgba(255, 255, 255, 0.1);
+    /* Монолитная карточка Liquid Glass */
+    .glass-card {
+        background: rgba(255, 255, 255, 0.05);
+        backdrop-filter: blur(15px) saturate(180%);
+        -webkit-backdrop-filter: blur(15px) saturate(180%);
+        border: 1px solid rgba(255, 255, 255, 0.15);
         border-radius: 20px;
         padding: 25px;
-        margin-bottom: 20px;
-        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-        transition: transform 0.3s ease;
-    }
-    
-    .task-card:hover {
-        transform: translateY(-5px);
-        background: rgba(255, 255, 255, 0.05);
-        border: 1px solid rgba(255, 255, 255, 0.2);
+        margin-bottom: 25px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
     }
 
-    /* Заголовок задачи */
-    .task-title {
-        font-size: 1.6rem;
+    /* Заголовок теперь всегда внутри и белый */
+    .task-title-inner {
+        font-size: 1.5rem;
         font-weight: 700;
-        background: linear-gradient(to right, #ffffff, #94a3b8);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
+        color: #ffffff;
         margin-bottom: 15px;
-        line-height: 1.2;
+        line-height: 1.3;
     }
 
-    /* Мета-данные (футер карточки) */
-    .task-footer {
+    /* Нижняя панель внутри карточки */
+    .task-meta-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 15px;
+        padding-top: 15px;
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .meta-info {
         display: flex;
         gap: 20px;
-        font-size: 0.95rem;
-        color: #94a3b8;
-        align-items: center;
-        border-top: 1px solid rgba(255, 255, 255, 0.05);
-        padding-top: 15px;
+        color: #cbd5e1;
+        font-size: 1rem;
     }
 
-    /* Кастомная кнопка статуса (Popover) */
+    /* Стиль для счетчика дней */
+    .fire-days {
+        color: #fb7185;
+        font-weight: 800;
+        text-shadow: 0 0 10px rgba(251, 113, 133, 0.3);
+    }
+
+    /* Исправление отображения Popover кнопок */
     div[data-testid="stPopover"] > button {
-        background: rgba(59, 130, 246, 0.1) !important;
-        color: #60a5fa !important;
-        border: 1px solid rgba(59, 130, 246, 0.3) !important;
+        background: rgba(255, 255, 255, 0.1) !important;
+        color: #ffffff !important;
+        border: 1px solid rgba(255, 255, 255, 0.2) !important;
         border-radius: 12px !important;
-        font-weight: 600 !important;
-        transition: 0.3s !important;
     }
     
-    div[data-testid="stPopover"] > button:hover {
-        background: rgba(59, 130, 246, 0.2) !important;
-        box-shadow: 0 0 15px rgba(59, 130, 246, 0.3);
-    }
-
-    /* Счетчики и акценты */
-    .days-badge {
-        color: #fb7185;
-        font-weight: 700;
-        display: flex;
-        align-items: center;
-        gap: 5px;
-    }
-
-    /* Тюнинг вкладок */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 10px;
-        background-color: transparent;
-    }
-    .stTabs [data-baseweb="tab"] {
-        background-color: rgba(255, 255, 255, 0.03);
-        border-radius: 10px 10px 0 0;
-        color: #94a3b8;
-    }
+    /* Убираем стандартные белые рамки вокруг элементов Streamlit внутри карточки */
+    .stVerticalBlock { gap: 0rem; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -108,7 +88,7 @@ def get_days(start_val):
 try:
     df = conn.read(ttl=0).dropna(how="all").fillna("")
     
-    st.markdown("# 🌌 Project Dashboard")
+    st.markdown("# 🚀 Project Dashboard")
     
     all_staff = ['Все', 'Программист', 'Дизайнер', 'SEO', 'Алина']
     tabs = st.tabs(["🔥 В работе", "⏳ План", "💎 Готово"])
@@ -118,68 +98,64 @@ try:
         curr_status = statuses[i]
         with tab:
             selected_person = st.segmented_control(
-                "Фильтр по команде:", options=all_staff, default="Все", key=f"f_{curr_status}"
+                "Фильтр по команде:", options=all_staff, default="Все", key=f"filter_{curr_status}"
             )
-            
-            st.write("") 
             
             tasks = df[df['Статус'] == curr_status]
             if selected_person != "Все":
                 tasks = tasks[tasks['Ответственный'] == selected_person]
             
             if tasks.empty:
-                st.info("Задач нет")
+                st.write("Пусто")
             else:
                 for idx, row in tasks.iterrows():
                     days = get_days(row['Начало'])
                     
-                    # Сама карточка
-                    with st.container():
-                        # Исправленная верстка: заголовок и кнопка в одной линии без перекосов
-                        col_content, col_btn = st.columns([0.82, 0.18])
-                        
-                        with col_content:
-                            # Начало карточки через markdown
-                            st.markdown(f"""
-                            <div class="task-card">
-                                <div class="task-title">{row['Задача']}</div>
-                            """, unsafe_allow_html=True)
-                        
-                        with col_btn:
-                            # Кнопка смены статуса (стеклянный поповер)
-                            with st.popover(curr_status, use_container_width=True):
-                                st.write("💫 Этап задачи")
-                                new_st = st.radio("Сменить на:", statuses, 
-                                                index=statuses.index(curr_status),
-                                                key=f"m_{idx}")
-                                if new_st != curr_status:
-                                    df.at[idx, 'Статус'] = new_st
-                                    conn.update(data=df)
-                                    st.rerun()
-
-                        # Мета-данные задачи внизу
-                        time_display = f'<div class="days-badge">🔥 {days} дн.</div>' if curr_status == "В работе" else f"📅 {row['Начало']}"
-                        
+                    # Генерируем HTML карточки
+                    # Мы открываем DIV здесь, а закрываем в конце блока
+                    st.markdown(f"""
+                    <div class="glass-card">
+                        <div class="task-title-inner">{row['Задача']}</div>
+                    """, unsafe_allow_html=True)
+                    
+                    # Строка с мета-инфо и кнопкой
+                    # Используем колонки Streamlit внутри, чтобы кнопка работала
+                    m_col1, m_col2 = st.columns([0.8, 0.2])
+                    
+                    with m_col1:
+                        time_label = f'<span class="fire-days">🔥 {days} дн.</span>' if curr_status == "В работе" else f"📅 {row['Начало']}"
                         st.markdown(f"""
-                                <div class="task-footer">
-                                    <div style="color:#ffffff">👤 <b>{row['Ответственный']}</b></div>
-                                    <div>📍 {row['Раздел сайта']}</div>
-                                    <div>{time_display}</div>
-                                </div>
+                            <div class="meta-info">
+                                <span>👤 <b>{row['Ответственный']}</b></span>
+                                <span>📍 {row['Раздел сайта']}</span>
+                                <span>{time_label}</span>
                             </div>
                         """, unsafe_allow_html=True)
+                    
+                    with m_col2:
+                        with st.popover(curr_status, use_container_width=True):
+                            new_st = st.radio("Сменить статус:", statuses, 
+                                            index=statuses.index(curr_status),
+                                            key=f"move_{idx}")
+                            if new_st != curr_status:
+                                df.at[idx, 'Статус'] = new_st
+                                conn.update(data=df)
+                                st.rerun()
+                    
+                    # Закрываем основной контейнер карточки
+                    st.markdown("</div>", unsafe_allow_html=True)
 
 except Exception as e:
-    st.error(f"Data error: {e}")
+    st.error(f"Ошибка: {e}")
 
-# Сайдбар для добавления задач
+# Сайдбар
 with st.sidebar:
-    st.markdown("### 🛠 Новая задача")
-    with st.form("new_task"):
+    st.header("✨ Новая задача")
+    with st.form("add_form", clear_on_submit=True):
         f_sec = st.text_input("Раздел")
-        f_task = st.text_area("Суть задачи")
+        f_task = st.text_area("Задача")
         f_who = st.selectbox("Кто", all_staff[1:])
-        if st.form_submit_button("Создать ✨"):
+        if st.form_submit_button("Создать"):
             new = {"Раздел сайта": f_sec, "Задача": f_task, "Ответственный": f_who, 
                    "Начало": date.today().strftime("%d.%m.%Y"), "Статус": "Запланировано"}
             upd = pd.concat([df, pd.DataFrame([new])], ignore_index=True)
