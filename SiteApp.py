@@ -3,174 +3,185 @@ from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import datetime, date
 
-st.set_page_config(page_title="Task Manager Pro", layout="wide")
+# 1. Настройка страницы
+st.set_page_config(page_title="Site Manager Liquid", layout="wide")
 
-# Подключение к Google Sheets
+# 2. Подключение
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# Финальный "Clean UI" дизайн
+# 3. Дизайн: Dark Liquid Glass
 st.markdown("""
 <style>
-    .stApp { background-color: #f8f9fa; color: #1e1e1e; }
-    
-    /* Карточка на всю ширину */
-    .task-card {
-        background: white;
-        border-radius: 16px;
-        padding: 24px;
-        margin-bottom: 12px;
-        border: 1px solid #e0e6ed;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.02);
-    }
-    
-    .task-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-        margin-bottom: 15px;
-    }
-    
-    .task-title { 
-        font-size: 1.5rem; 
-        font-weight: 700; 
-        color: #1a1c1e;
-        flex: 1;
-        margin-right: 20px;
-    }
-    
-    .task-footer {
-        font-size: 1.1rem;
-        color: #606770;
-        display: flex;
-        gap: 25px;
-        align-items: center;
+    /* Основной фон - темный глубокий градиент */
+    .stApp {
+        background: radial-gradient(circle at top right, #1e293b, #0f172a, #020617);
+        color: #f1f5f9;
     }
 
-    /* Стили для кастомных кнопок статуса внутри popover */
-    div[data-testid="stPopover"] > button {
-        border-radius: 40px !important;
-        padding: 4px 16px !important;
-        font-weight: 700 !important;
-        text-transform: uppercase !important;
-        font-size: 0.85rem !important;
+    /* Эффект Liquid Glass для карточек */
+    .task-card {
+        background: rgba(255, 255, 255, 0.03);
+        backdrop-filter: blur(12px) saturate(180%);
+        -webkit-backdrop-filter: blur(12px) saturate(180%);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 20px;
+        padding: 25px;
+        margin-bottom: 20px;
+        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        transition: transform 0.3s ease;
     }
     
-    .days-badge { color: #d73a49; font-weight: 800; font-size: 1.1rem; }
+    .task-card:hover {
+        transform: translateY(-5px);
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    /* Заголовок задачи */
+    .task-title {
+        font-size: 1.6rem;
+        font-weight: 700;
+        background: linear-gradient(to right, #ffffff, #94a3b8);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 15px;
+        line-height: 1.2;
+    }
+
+    /* Мета-данные (футер карточки) */
+    .task-footer {
+        display: flex;
+        gap: 20px;
+        font-size: 0.95rem;
+        color: #94a3b8;
+        align-items: center;
+        border-top: 1px solid rgba(255, 255, 255, 0.05);
+        padding-top: 15px;
+    }
+
+    /* Кастомная кнопка статуса (Popover) */
+    div[data-testid="stPopover"] > button {
+        background: rgba(59, 130, 246, 0.1) !important;
+        color: #60a5fa !important;
+        border: 1px solid rgba(59, 130, 246, 0.3) !important;
+        border-radius: 12px !important;
+        font-weight: 600 !important;
+        transition: 0.3s !important;
+    }
     
-    /* Убираем лишние отступы Streamlit */
-    .block-container { padding-top: 2rem; }
+    div[data-testid="stPopover"] > button:hover {
+        background: rgba(59, 130, 246, 0.2) !important;
+        box-shadow: 0 0 15px rgba(59, 130, 246, 0.3);
+    }
+
+    /* Счетчики и акценты */
+    .days-badge {
+        color: #fb7185;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+    }
+
+    /* Тюнинг вкладок */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 10px;
+        background-color: transparent;
+    }
+    .stTabs [data-baseweb="tab"] {
+        background-color: rgba(255, 255, 255, 0.03);
+        border-radius: 10px 10px 0 0;
+        color: #94a3b8;
+    }
 </style>
 """, unsafe_allow_html=True)
 
 def get_days(start_val):
     try:
         if isinstance(start_val, (date, datetime)):
-            start_date = start_val.date() if isinstance(start_val, datetime) else start_val
+            start_dt = start_val.date() if isinstance(start_val, datetime) else start_val
         else:
-            start_date = datetime.strptime(str(start_val).strip(), "%d.%m.%Y").date()
-        return (date.today() - start_date).days
+            start_dt = datetime.strptime(str(start_val).strip(), "%d.%m.%Y").date()
+        return (date.today() - start_dt).days
     except: return 0
 
 try:
     df = conn.read(ttl=0).dropna(how="all").fillna("")
     
-    st.title("🚀 Панель управления проектом")
+    st.markdown("# 🌌 Project Dashboard")
     
-    # Список сотрудников (всегда отображаются)
     all_staff = ['Все', 'Программист', 'Дизайнер', 'SEO', 'Алина']
-    
-    tabs = st.tabs(["🔥 В работе", "📅 План", "✅ Завершено"])
+    tabs = st.tabs(["🔥 В работе", "⏳ План", "💎 Готово"])
     statuses = ["В работе", "Запланировано", "Готово"]
-    
-    # Цветовая схема для кнопок статуса
-    status_colors = {
-        "В работе": "primary", 
-        "Запланировано": "secondary", 
-        "Готово": "success"
-    }
 
     for i, tab in enumerate(tabs):
-        current_status = statuses[i]
+        curr_status = statuses[i]
         with tab:
-            # Горизонтальный переключатель ответственных
             selected_person = st.segmented_control(
-                "Кто выполняет:", 
-                options=all_staff, 
-                default="Все",
-                key=f"filter_{current_status}"
+                "Фильтр по команде:", options=all_staff, default="Все", key=f"f_{curr_status}"
             )
             
-            st.write("") # Пробел
+            st.write("") 
             
-            # Фильтрация
-            tasks = df[df['Статус'] == current_status]
+            tasks = df[df['Статус'] == curr_status]
             if selected_person != "Все":
                 tasks = tasks[tasks['Ответственный'] == selected_person]
             
             if tasks.empty:
-                st.info(f"У сотрудника {selected_person} сейчас нет задач в этом разделе")
+                st.info("Задач нет")
             else:
                 for idx, row in tasks.iterrows():
                     days = get_days(row['Начало'])
                     
-                    # Создаем контейнер карточки
+                    # Сама карточка
                     with st.container():
-                        st.markdown(f'<div class="task-card">', unsafe_allow_html=True)
+                        # Исправленная верстка: заголовок и кнопка в одной линии без перекосов
+                        col_content, col_btn = st.columns([0.82, 0.18])
                         
-                        # Верхняя часть: Заголовок и кнопка смены статуса
-                        header_col, status_col = st.columns([0.8, 0.2])
+                        with col_content:
+                            # Начало карточки через markdown
+                            st.markdown(f"""
+                            <div class="task-card">
+                                <div class="task-title">{row['Задача']}</div>
+                            """, unsafe_allow_html=True)
                         
-                        with header_col:
-                            st.markdown(f'<div class="task-title">{row["Задача"]}</div>', unsafe_allow_html=True)
-                        
-                        with status_col:
-                            # Поповер вместо выпадающего списка справа
-                            with st.popover(current_status, use_container_width=True):
-                                st.write("📝 Сменить этап:")
-                                new_st = st.radio(
-                                    "Переместить в:", 
-                                    statuses, 
-                                    index=statuses.index(current_status),
-                                    key=f"move_{idx}",
-                                    label_visibility="collapsed"
-                                )
-                                if new_st != current_status:
+                        with col_btn:
+                            # Кнопка смены статуса (стеклянный поповер)
+                            with st.popover(curr_status, use_container_width=True):
+                                st.write("💫 Этап задачи")
+                                new_st = st.radio("Сменить на:", statuses, 
+                                                index=statuses.index(curr_status),
+                                                key=f"m_{idx}")
+                                if new_st != curr_status:
                                     df.at[idx, 'Статус'] = new_st
                                     conn.update(data=df)
                                     st.rerun()
-                        
-                        # Нижняя часть: Мета-данные
-                        time_html = f'<span class="days-badge">🔥 {days} дн. в работе</span>' if current_status == "В работе" else f"📅 Старт: {row['Начало']}"
+
+                        # Мета-данные задачи внизу
+                        time_display = f'<div class="days-badge">🔥 {days} дн.</div>' if curr_status == "В работе" else f"📅 {row['Начало']}"
                         
                         st.markdown(f"""
-                            <div class="task-footer">
-                                <div>👤 <b>{row['Ответственный']}</b></div>
-                                <div>📍 {row['Раздел сайта']}</div>
-                                <div>{time_html}</div>
+                                <div class="task-footer">
+                                    <div style="color:#ffffff">👤 <b>{row['Ответственный']}</b></div>
+                                    <div>📍 {row['Раздел сайта']}</div>
+                                    <div>{time_display}</div>
+                                </div>
                             </div>
-                        </div>
                         """, unsafe_allow_html=True)
-                        st.write("") # Для визуального разделения карточек
 
 except Exception as e:
-    st.error(f"Не удалось обновить данные: {e}")
+    st.error(f"Data error: {e}")
 
-# Боковая панель для создания задач
+# Сайдбар для добавления задач
 with st.sidebar:
-    st.header("✨ Создать задачу")
-    with st.form("new_task_form", clear_on_submit=True):
-        sec = st.text_input("Раздел сайта")
-        tsk = st.text_area("Что нужно сделать?")
-        who = st.selectbox("Ответственный", ['Программист', 'Дизайнер', 'SEO', 'Алина'])
-        
-        if st.form_submit_button("Добавить в работу"):
-            new_row = {
-                "Раздел сайта": sec, 
-                "Задача": tsk, 
-                "Ответственный": who, 
-                "Начало": date.today().strftime("%d.%m.%Y"), 
-                "Статус": "Запланировано"
-            }
-            upd = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+    st.markdown("### 🛠 Новая задача")
+    with st.form("new_task"):
+        f_sec = st.text_input("Раздел")
+        f_task = st.text_area("Суть задачи")
+        f_who = st.selectbox("Кто", all_staff[1:])
+        if st.form_submit_button("Создать ✨"):
+            new = {"Раздел сайта": f_sec, "Задача": f_task, "Ответственный": f_who, 
+                   "Начало": date.today().strftime("%d.%m.%Y"), "Статус": "Запланировано"}
+            upd = pd.concat([df, pd.DataFrame([new])], ignore_index=True)
             conn.update(data=upd)
             st.rerun()
