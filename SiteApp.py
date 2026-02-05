@@ -11,15 +11,25 @@ url = "https://docs.google.com/spreadsheets/d/1-Lj3g5ICKsELa1HBZNi2mdZ39WNkHNvFy
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 # Читаем данные (добавили обработку ошибок и пробелов)
+# --- Подключение к Google Sheets ---
+conn = st.connection("gsheets", type=GSheetsConnection)
+
 try:
-    # worksheet="Общая" должна быть без пробелов
-    df = conn.read(spreadsheet=url, worksheet="Общая", ttl=0)
-    df = df.dropna(how="all") 
+    # Читаем данные. Если не находим "Общая", берем самый первый лист в таблице
+    df = conn.read(spreadsheet=url, ttl=0) 
+    df = df.dropna(how="all")
 except Exception as e:
-    # Если не находит, выведем список всех листов, которые он ВИДИТ
-    st.error(f"Ошибка: Лист 'Общая' не найден.")
-    st.info("Проверь, нет ли лишнего пробела в названии вкладки в Google Таблице.")
+    st.error(f"Ошибка доступа к Google Таблице. Проверь ссылку в Secrets!")
     st.stop()
+
+# --- Вывод таблицы ---
+st.subheader("📋 Актуальные задачи")
+edited_df = st.data_editor(df, use_container_width=True, num_rows="dynamic")
+
+if st.button("💾 Сохранить изменения"):
+    # Сохраняем в первый лист
+    conn.update(spreadsheet=url, data=edited_df)
+    st.success("Облако обновлено!")
 # 4. Вывод таблицы
 st.subheader("Список задач из Google")
 edited_df = st.data_editor(df, use_container_width=True, num_rows="dynamic")
