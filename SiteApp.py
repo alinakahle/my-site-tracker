@@ -1,49 +1,29 @@
 import streamlit as st
+from streamlit_gsheets import GSheetsConnection
 import pandas as pd
-import os
-from datetime import date
 
-# Настройки
-st.set_page_config(page_title="Task Tracker", layout="wide")
+# ... (твой блок с паролем остается без изменений) ...
 
-# Проверка пароля
-if "auth" not in st.session_state:
-    st.session_state.auth = False
+# 1. Ссылка на твою таблицу
+url = "https://docs.google.com/spreadsheets/d/1-Lj3g5ICKsELa1HBZNi2mdZ39WNkHNvFye0vJj3G06Y/edit?gid=0#gid=0"
 
-if not st.session_state.auth:
-    st.title("🔐 Вход")
-    pwd = st.text_input("Пароль", type="password")
-    if st.button("Войти"):
-        if pwd == "12345": # ТВОЙ ПАРОЛЬ
-            st.session_state.auth = True
-            st.rerun()
-        else:
-            st.error("Неверно")
-else:
-    # Основная программа
-    st.title("📱 Трекер задач сайта")
-    
-    FILE = "my_tasks.csv"
-    df = pd.read_csv(FILE) if os.path.exists(FILE) else pd.DataFrame(columns=["Раздел", "Задача", "Ответственный", "Дедлайн", "Статус"])
+# 2. Создаем соединение
+conn = st.connection("gsheets", type=GSheetsConnection)
 
-    # Добавление задачи
-    with st.sidebar:
-        st.header("➕ Новая задача")
-        with st.form("add"):
-            section = st.text_input("Раздел")
-            task = st.text_area("Что сделать?")
-            who = st.selectbox("Кто", ["Программист", "Дизайнер", "Алина", "Леша"])
-            due = st.date_input("Дедлайн")
-            status = st.selectbox("Статус", ["Запланировано", "В работе", "Готово"])
-            if st.form_submit_button("Добавить"):
-                new_data = pd.DataFrame([[section, task, who, due, status]], columns=df.columns)
-                df = pd.concat([df, new_data], ignore_index=True)
-                df.to_csv(FILE, index=False)
-                st.rerun()
+# 3. Читаем данные. 
+# ВНИМАНИЕ: Проверь, чтобы вкладка в Google Таблице называлась именно "Общая" (с большой буквы)
+try:
+    df = conn.read(spreadsheet=url, worksheet="Общая", ttl=0)
+    df = df.dropna(how="all") # Убираем пустые строки
+except Exception as e:
+    st.error(f"Не удалось найти лист 'Общая'. Проверь название вкладки в Google Таблице!")
+    st.stop()
 
-    # Таблица
-    edited_df = st.data_editor(df, use_container_width=True, num_rows="dynamic")
-    
-    if st.button("💾 Сохранить изменения"):
-        edited_df.to_csv(FILE, index=False)
-        st.success("Сохранено!")
+# 4. Вывод таблицы
+st.subheader("Список задач из Google")
+edited_df = st.data_editor(df, use_container_width=True, num_rows="dynamic")
+
+# 5. Кнопка сохранения
+if st.button("💾 Сохранить изменения в облако"):
+    conn.update(spreadsheet=url, worksheet="Общая", data=edited_df)
+    st.success("Готово! Данные в Google Таблице обновлены.")
