@@ -2,39 +2,45 @@ import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 
-# ... (твой блок с паролем остается без изменений) ...
+# --- Настройки страницы ---
+st.set_page_config(page_title="Site Task Tracker", layout="wide")
 
-# 1. Ссылка на твою таблицу
+# --- Ссылка на таблицу ---
 url = "https://docs.google.com/spreadsheets/d/1-Lj3g5ICKsELa1HBZNi2mdZ39WNkHNvFye0vJj3G06Y/edit"
 
-# 2. Создаем соединение
-conn = st.connection("gsheets", type=GSheetsConnection)
+# --- Защита паролем ---
+if "auth" not in st.session_state:
+    st.session_state.auth = False
 
-# Читаем данные (добавили обработку ошибок и пробелов)
-# --- Подключение к Google Sheets ---
-conn = st.connection("gsheets", type=GSheetsConnection)
+if not st.session_state.auth:
+    st.title("🔐 Вход")
+    pwd = st.text_input("Введите пароль:", type="password")
+    if st.button("Войти"):
+        if pwd == "12345": # Твой пароль
+            st.session_state.auth = True
+            st.rerun()
+        else:
+            st.error("Неверный пароль")
+else:
+    st.title("📱 Трекер задач сайта")
 
-try:
-    # Читаем данные. Если не находим "Общая", берем самый первый лист в таблице
-    df = conn.read(spreadsheet=url, ttl=0) 
-    df = df.dropna(how="all")
-except Exception as e:
-    st.error(f"Ошибка доступа к Google Таблице. Проверь ссылку в Secrets!")
-    st.stop()
+    # Подключение к Google Sheets
+    conn = st.connection("gsheets", type=GSheetsConnection)
 
-# --- Вывод таблицы ---
-st.subheader("📋 Актуальные задачи")
-edited_df = st.data_editor(df, use_container_width=True, num_rows="dynamic")
+    # Читаем данные (самый первый лист)
+    try:
+        df = conn.read(spreadsheet=url, ttl=0)
+        df = df.dropna(how="all")
+    except Exception as e:
+        st.error("Ошибка подключения к Google. Проверь настройки Secrets!")
+        st.stop()
 
-if st.button("💾 Сохранить изменения"):
-    # Сохраняем в первый лист
-    conn.update(spreadsheet=url, data=edited_df)
-    st.success("Облако обновлено!")
-# 4. Вывод таблицы
-st.subheader("Список задач из Google")
-edited_df = st.data_editor(df, use_container_width=True, num_rows="dynamic")
+    # Основная таблица
+    st.subheader("Список задач")
+    # Добавили ключевое слово key="main_editor", чтобы не было ошибки дубликата
+    edited_df = st.data_editor(df, use_container_width=True, num_rows="dynamic", key="main_editor")
 
-# 5. Кнопка сохранения
-if st.button("💾 Сохранить изменения в облако"):
-    conn.update(spreadsheet=url, worksheet="Общая", data=edited_df)
-    st.success("Готово! Данные в Google Таблице обновлены.")
+    # Кнопка сохранения
+    if st.button("💾 Сохранить все изменения"):
+        conn.update(spreadsheet=url, data=edited_df)
+        st.success("Данные в Google Таблице обновлены!")
