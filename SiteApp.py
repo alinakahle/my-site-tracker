@@ -8,61 +8,52 @@ st.set_page_config(page_title="Task Manager Pro", layout="wide")
 # Подключение
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# Улучшенный "Clean & Bold" дизайн
+# Дизайн "Premium Management"
 st.markdown("""
 <style>
-    .stApp { background-color: #f0f2f6; color: #1e1e1e; }
+    .stApp { background-color: #f4f7f9; color: #1e1e1e; }
     
-    /* Заголовки групп ответственных */
-    .person-header {
-        font-size: 1.4rem;
-        font-weight: 800;
-        color: #0e1117;
-        margin: 25px 0 15px 0;
-        padding-left: 10px;
-        border-left: 5px solid #58a6ff;
-    }
-
-    /* Карточка задачи */
+    /* Стили для карточки */
     .task-card {
         background: white;
-        border-radius: 12px;
-        padding: 20px;
-        margin-bottom: 15px;
-        border: 1px solid #e6e8eb;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        border-radius: 16px;
+        padding: 24px;
+        margin-bottom: 20px;
+        border: 1px solid #e0e6ed;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.03);
     }
     
     .task-title { 
-        font-size: 1.3rem; 
+        font-size: 1.4rem; 
         font-weight: 700; 
         color: #1a1c1e;
-        line-height: 1.3;
-        margin-bottom: 10px;
+        margin-bottom: 12px;
     }
     
     .task-details {
-        font-size: 1rem;
-        color: #5f6368;
+        font-size: 1.1rem;
+        color: #606770;
         display: flex;
-        gap: 20px;
+        gap: 30px;
         flex-wrap: wrap;
     }
 
-    .info-item { display: flex; align-items: center; gap: 5px; }
-
-    /* Метки */
+    /* Бейджи */
     .status-badge {
-        font-size: 0.85rem;
+        font-size: 0.9rem;
         font-weight: 700;
-        padding: 5px 15px;
-        border-radius: 30px;
+        padding: 6px 18px;
+        border-radius: 40px;
+        text-transform: uppercase;
     }
-    .badge-doing { background: #e7f5ff; color: #007bff; border: 1px solid #b3d7ff; }
-    .badge-todo { background: #f8f9fa; color: #5f6368; border: 1px solid #dadce0; }
-    .badge-done { background: #e6ffed; color: #2da44e; border: 1px solid #acf2bd; }
+    .badge-doing { background: #eef6ff; color: #007bff; border: 1px solid #cce5ff; }
+    .badge-todo { background: #f8f9fa; color: #5f6368; border: 1px solid #dee2e6; }
+    .badge-done { background: #eafff0; color: #2da44e; border: 1px solid #bef5cb; }
     
-    .days-count { color: #d73a49; font-weight: 700; }
+    .days-count { color: #d73a49; font-weight: 800; font-size: 1.1rem; }
+    
+    /* Убираем лишние отступы у колонок */
+    [data-testid="column"] { display: flex; align-items: center; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -77,6 +68,9 @@ try:
     
     st.title("🚀 Панель управления проектом")
     
+    # Список всех ответственных (фиксированный, чтобы никто не пропадал)
+    all_staff = ['Все', 'Программист', 'Дизайнер', 'SEO', 'Алина']
+    
     tabs = st.tabs(["🔥 В работе", "📅 План", "✅ Завершено"])
     statuses = ["В работе", "Запланировано", "Готово"]
     styles = {"В работе": "doing", "Запланировано": "todo", "Готово": "done"}
@@ -84,67 +78,72 @@ try:
     for i, tab in enumerate(tabs):
         current_status = statuses[i]
         with tab:
+            # 1. Горизонтальное меню выбора ответственного
+            selected_person = st.segmented_control(
+                "Кто выполняет:", 
+                options=all_staff, 
+                default="Все",
+                key=f"filter_{current_status}"
+            )
+            
+            st.write("---") # Разделитель
+            
+            # Фильтруем данные
             tasks = df[df['Статус'] == current_status]
+            if selected_person != "Все":
+                tasks = tasks[tasks['Ответственный'] == selected_person]
             
             if tasks.empty:
-                st.write("Пока здесь пусто")
+                st.info(f"У сотрудника {selected_person} нет задач в этом разделе")
             else:
-                # Группируем задачи по ответственным
-                for person in tasks['Ответственный'].unique():
-                    st.markdown(f'<div class="person-header">👤 {person}</div>', unsafe_allow_html=True)
+                for idx, row in tasks.iterrows():
+                    days = get_days(row['Начало'])
+                    time_text = f'<span class="days-count">🔥 {days} дн. в работе</span>' if current_status == "В работе" else ""
                     
-                    person_tasks = tasks[tasks['Ответственный'] == person]
+                    # Макет карточки
+                    col_info, col_action = st.columns([0.75, 0.25])
                     
-                    for idx, row in person_tasks.iterrows():
-                        days = get_days(row['Начало'])
-                        time_text = f'<span class="days-count">🔥 {days} дн.</span>' if current_status == "В работе" else ""
-                        
-                        # Контейнер задачи
-                        c1, c2 = st.columns([0.8, 0.2])
-                        with c1:
-                            st.markdown(f"""
-                            <div class="task-card">
-                                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                                    <div class="task-title">{row['Задача']}</div>
-                                    <div class="status-badge badge-{styles[current_status]}">{current_status}</div>
-                                </div>
-                                <div class="task-details">
-                                    <div class="info-item">📍 {row['Раздел сайта']}</div>
-                                    <div class="info-item">📅 Старт: {row['Начало']}</div>
-                                    <div class="info-item">{time_text}</div>
-                                </div>
+                    with col_info:
+                        st.markdown(f"""
+                        <div class="task-card">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
+                                <div class="task-title">{row['Задача']}</div>
+                                <div class="status-badge badge-{styles[current_status]}">{current_status}</div>
                             </div>
-                            """, unsafe_allow_html=True)
-                        
-                        with c2:
-                            st.write("") # Отступ
-                            new_st = st.selectbox("Смена статуса", statuses, 
-                                                index=statuses.index(current_status),
-                                                key=f"st_{idx}")
-                            if new_st != current_status:
-                                df.at[idx, 'Статус'] = new_st
-                                conn.update(data=df)
-                                st.rerun()
+                            <div class="task-details">
+                                <div>👤 <b>{row['Ответственный']}</b></div>
+                                <div>📍 {row['Раздел сайта']}</div>
+                                <div>📅 {row['Начало']}</div>
+                                <div>{time_text}</div>
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    
+                    with col_action:
+                        # Селектор смены статуса прямо в строке
+                        new_st = st.selectbox("Переместить:", statuses, 
+                                            index=statuses.index(current_status),
+                                            key=f"move_{idx}")
+                        if new_st != current_status:
+                            df.at[idx, 'Status'] = new_st # Обновляем статус
+                            conn.update(data=df)
+                            st.rerun()
 
 except Exception as e:
-    st.error(f"Ошибка при загрузке данных: {e}")
+    st.error(f"Ошибка загрузки: {e}")
 
-# Боковая панель для добавления
+# Боковая панель
 with st.sidebar:
-    st.header("✨ Создать задачу")
-    with st.form("add_new"):
+    st.header("✨ Новая задача")
+    with st.form("add_task_form", clear_on_submit=True):
         sec = st.text_input("Раздел сайта")
-        tsk = st.text_area("Описание задачи")
-        who = st.selectbox("Исполнитель", ["Программист", "Дизайнер", "SEO", "Алина"])
-        if st.form_submit_button("Добавить в список"):
-            new_data = {
-                "Раздел сайта": sec, 
-                "Задача": tsk, 
-                "Ответственный": who, 
-                "Начало": date.today().strftime("%d.%m.%Y"), 
-                "Статус": "Запланировано"
+        tsk = st.text_area("Что сделать?")
+        who = st.selectbox("Ответственный", ['Программист', 'Дизайнер', 'SEO', 'Алина'])
+        if st.form_submit_button("Создать задачу"):
+            new_row = {
+                "Раздел сайта": sec, "Задача": tsk, "Ответственный": who, 
+                "Начало": date.today().strftime("%d.%m.%Y"), "Статус": "Запланировано"
             }
-            # Совмещаем с таблицей
-            upd = pd.concat([df, pd.DataFrame([new_data])], ignore_index=True)
+            upd = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
             conn.update(data=upd)
             st.rerun()
