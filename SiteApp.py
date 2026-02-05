@@ -2,104 +2,102 @@ import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 
-# --- 1. Настройка для мобильных и светлая тема ---
-st.set_page_config(page_title="Site App", layout="wide", initial_sidebar_state="collapsed")
+# --- 1. Настройки и стиль ---
+st.set_page_config(page_title="Site Manager", layout="wide")
 
-# Вставляем CSS, чтобы исправить отображение на телефонах
 st.markdown("""
     <style>
-    /* Принудительный светлый фон и темный текст */
-    .stApp { background-color: white !important; color: #1E1E1E !important; }
-    h1, h2, h3, p { color: #1E1E1E !important; }
+    /* Принудительный светлый стиль */
+    .stApp { background-color: #F5F7F9 !important; color: #1E1E1E !important; }
     
-    /* Стилизация карточек статистики */
-    [data-testid="stMetricValue"] { font-size: 24px !important; color: #007BFF !important; }
-    
-    /* Делаем кнопки крупнее для телефона */
-    .stButton>button {
-        width: 100%;
-        height: 3em;
-        border-radius: 10px;
-        background-color: #007BFF;
-        color: white;
-        font-weight: bold;
-        border: none;
+    /* Стиль карточки задачи */
+    .task-card {
+        background-color: white;
+        padding: 15px;
+        border-radius: 12px;
+        border-left: 6px solid #007BFF;
+        margin-bottom: 10px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
     }
-    
-    /* Убираем лишние отступы сверху на мобилках */
-    .block-container { padding-top: 1rem !important; }
+    .status-badge {
+        padding: 2px 8px;
+        border-radius: 5px;
+        font-size: 12px;
+        font-weight: bold;
+        float: right;
+    }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. Данные ---
+# --- 2. Подключение ---
 url = "https://docs.google.com/spreadsheets/d/1-Lj3g5ICKsELa1HBZNi2mdZ39WNkHNvFye0vJj3G06Y/edit"
 
 if "auth" not in st.session_state:
     st.session_state.auth = False
 
-# --- 3. Вход (крупные поля для телефона) ---
+# --- 3. Вход ---
 if not st.session_state.auth:
     st.title("🔐 Вход")
     pwd = st.text_input("Пароль", type="password")
-    if st.button("Войти в систему"):
+    if st.button("Войти"):
         if pwd == "12345": 
             st.session_state.auth = True
             st.rerun()
-        else:
-            st.error("Ошибка")
 else:
-    # --- 4. Рабочая область ---
+    # --- 4. Загрузка данных ---
     conn = st.connection("gsheets", type=GSheetsConnection)
     df = conn.read(spreadsheet=url, ttl=0).dropna(how="all")
 
-    st.header("📱 Трекер задач")
+    st.header("📱 Задачи проекта")
 
-    # Компактная статистика
-    c1, c2 = st.columns(2)
-    c1.metric("Всего", len(df))
-    c2.metric("Готово", len(df[df['Статус'] == 'Готово']))
-
-    # --- 5. Добавление задачи через раскрывающийся блок (удобно для мобилок) ---
-    with st.expander("➕ ДОБАВИТЬ НОВУЮ ЗАДАЧУ"):
-        with st.form("mobile_form", clear_on_submit=True):
-            resurs = st.text_input("Раздел")
-            task_desc = st.text_area("Что сделать?")
+    # Быстрая форма добавления
+    with st.expander("➕ Новая задача"):
+        with st.form("add_task"):
+            sec = st.text_input("Раздел")
+            tsk = st.text_area("Описание")
             who = st.selectbox("Кто", ["Алина", "Программист", "Дизайнер", "СЕО", "Офис"])
-            stat = st.selectbox("Статус", ["Запланировано", "В работе", "На проверке", "Готово"])
-            
-            if st.form_submit_button("СОЗДАТЬ"):
-                if resurs and task_desc:
-                    # Важно: названия колонок ниже должны быть ТАКИМИ ЖЕ как в твоей таблице
-                    new_data = pd.DataFrame([{"Раздел": resurs, "Задача": task_desc, "Ответственный": who, "Статус": stat}])
-                    updated = pd.concat([df, new_data], ignore_index=True)
-                    conn.update(spreadsheet=url, data=updated)
-                    st.success("Добавлено!")
-                    st.rerun()
+            stt = st.selectbox("Статус", ["Запланировано", "В работе", "На проверке", "Готово"])
+            if st.form_submit_button("Создать"):
+                new_data = pd.DataFrame([{"Раздел": sec, "Задача": tsk, "Ответственный": who, "Статус": stt}])
+                updated = pd.concat([df, new_data], ignore_index=True)
+                conn.update(spreadsheet=url, data=updated)
+                st.success("Добавлено!")
+                st.rerun()
 
     st.divider()
 
-    # --- 6. Таблица с цветовой индикацией ---
-    st.subheader("📝 Список")
+    # --- 5. Отображение задач (Карточки вместо таблицы) ---
+    
+    # Цвета для статусов
+    status_colors = {
+        "Запланировано": "#E0E0E0",
+        "В работе": "#FFF3CD",
+        "На проверке": "#CCE5FF",
+        "Готово": "#D4EDDA"
+    }
 
-    # Функция для раскраски строк (только для просмотра)
-    def color_status(val):
-        color = '#ffffff'
-        if val == 'Готово': color = '#d4edda' # светло-зеленый
-        elif val == 'В работе': color = '#fff3cd' # желтый
-        elif val == 'На проверке': color = '#cce5ff' # голубой
-        return f'background-color: {color}'
-
-    # Используем data_editor для возможности правок
-    edited_df = st.data_editor(
-        df,
-        use_container_width=True,
-        key="mobile_editor",
-        column_config={
-            "Статус": st.column_config.SelectboxColumn(options=["Запланировано", "В работе", "На проверке", "Готово"]),
-            "Ответственный": st.column_config.SelectboxColumn(options=["Алина", "Программист", "Дизайнер", "СЕО", "Офис"])
-        }
-    )
-
-    if st.button("💾 СОХРАНИТЬ ИЗМЕНЕНИЯ"):
-        conn.update(spreadsheet=url, data=edited_df)
-        st.toast("Обновлено в Google!")
+    # Выводим задачи в виде списка карточек
+    for index, row in df.iterrows():
+        bg_color = status_colors.get(row['Статус'], "#FFFFFF")
+        
+        # Создаем блок карточки
+        with st.container():
+            st.markdown(f"""
+            <div class="task-card" style="border-left-color: {bg_color}">
+                <span class="status-badge" style="background-color: {bg_color};">{row['Статус']}</span>
+                <b style="font-size: 14px; color: #666;">{row['Раздел']}</b>< brutal />
+                <div style="margin-top: 8px; font-size: 16px;">{row['Задача']}</div>
+                <div style="margin-top: 10px; font-size: 13px; color: #555;">👤 {row['Ответственный']}</div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Кнопка быстрой смены статуса прямо под карточкой
+            new_stat = st.selectbox(f"Изменить статус для задачи {index}", 
+                                    ["Запланировано", "В работе", "На проверке", "Готово"], 
+                                    index=["Запланировано", "В работе", "На проверке", "Готово"].index(row['Статус']),
+                                    key=f"select_{index}", label_visibility="collapsed")
+            
+            if new_stat != row['Статус']:
+                df.at[index, 'Статус'] = new_stat
+                conn.update(spreadsheet=url, data=df)
+                st.rerun()
