@@ -2,97 +2,87 @@ import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 
-# 1. Конфигурация
-st.set_page_config(page_title="Site Manager", layout="wide")
+# 1. Настройки (стандартный светлый вид)
+st.set_page_config(page_title="Site Tracker", layout="wide")
 
-# 2. Стили (Mobile vs Desktop)
-st.markdown("""
-<style>
-.task-card {
-    background-color: #1A1C24;
-    padding: 15px;
-    border-radius: 12px;
-    margin-bottom: 10px;
-    border-left: 8px solid #ddd;
-}
-.task-text { color: white; font-size: 16px; font-weight: 700; margin: 5px 0; }
-.section-title { color: #8B949E; font-size: 11px; font-weight: bold; }
-.status-badge {
-    padding: 3px 10px; border-radius: 8px; font-size: 10px;
-    font-weight: 900; float: right; color: black;
-}
-@media (max-width: 800px) {
-    .stApp { background-color: #0E1117 !important; color: white !important; }
-}
-@media (min-width: 801px) {
-    .stApp { background-color: white !important; color: black !important; }
-}
-</style>
-""", unsafe_allow_html=True)
-
-# 3. Данные
+# Подключение к таблице
 url = "https://docs.google.com/spreadsheets/d/1-Lj3g5ICKsELa1HBZNi2mdZ39WNkHNvFye0vJj3G06Y/edit"
 
 if "auth" not in st.session_state:
     st.session_state.auth = False
 
+# --- Вход ---
 if not st.session_state.auth:
     st.title("🔐 Вход")
-    p_v = st.text_input("Пароль:", type="password")
+    pwd = st.text_input("Пароль:", type="password")
     if st.button("Войти"):
-        if p_v == "12345":
+        if pwd == "12345":
             st.session_state.auth = True
             st.rerun()
 else:
-    # Соединение
+    # --- Основной экран ---
     conn = st.connection("gsheets", type=GSheetsConnection)
     df = conn.read(spreadsheet=url, ttl=0).dropna(how="all").fillna("")
 
-    st.title("🚀 МОНИТОРИНГ")
+    st.title("🚀 Мониторинг задач")
 
-    with st.expander("➕ НОВАЯ ЗАДАЧА"):
-        with st.form("add_task", clear_on_submit=True):
+    # Вкладки: отдельно для профи (таблица) и для телефона (список)
+    tab_table, tab_mobile = st.tabs(["💻 Таблица (ПК)", "📱 Мобильный вид"])
+
+    with tab_table:
+        st.info("Редактируйте ячейки и нажмите кнопку сохранения ниже")
+        # Таблица в исходном виде
+        edited_df = st.data_editor(
+            df, 
+            use_container_width=True, 
+            num_rows="dynamic",
+            key="desktop_editor"
+        )
+        if st.button("💾 Сохранить изменения в Google"):
+            conn.update(spreadsheet=url, data=edited_df)
+            st.success("Данные в Google Таблице обновлены!")
+            st.rerun()
+
+    with tab_mobile:
+        st.subheader("Список задач")
+        # Цвета статусов
+        colors = {"Готово": "🟢", "В работе": "🟡", "На проверке": "🔵", "Запланировано": "⚪"}
+        
+        for i, r in df.iloc[::-1].iterrows():
+            st_val = str(r.iloc[4]) if len(r) > 4 else "Запланировано"
+            icon = colors.get(st_val, "🔘")
+            
+            # Простой и чистый вид карточки без лишнего CSS, который ломает цвета
+            with st.container(border=True):
+                st.markdown(f"**{icon} {st_val}**")
+                st.markdown(f"**Раздел:** {r.iloc[0]}")
+                st.markdown(f"**Задача:** {r.iloc[1]}")
+                st.markdown(f"👤 {r.iloc[2]}")
+                
+                # Кнопка смены статуса
+                with st.popover("Изменить статус"):
+                    new_s = st.radio(
+                        "Выберите статус", 
+                        ["Запланировано", "В работе", "На проверке", "Готово"],
+                        index=["Запланировано", "В работе", "На проверке", "Готово"].index(st_val) if st_val in ["Запланировано", "В работе", "На проверке", "Готово"] else 0,
+                        key=f"status_{i}"
+                    )
+                    if st.button("Обновить", key=f"btn_{i}"):
+                        df.iat[i, 4] = new_s
+                        conn.update(spreadsheet=url, data=df)
+                        st.rerun()
+
+    # Форма добавления новой задачи (снизу)
+    with st.expander("➕ Добавить новую задачу"):
+        with st.form("new_task"):
             f_s = st.text_input("Раздел")
             f_t = st.text_area("Задача")
             f_w = st.selectbox("Кто", ["Алина", "Программист", "Дизайнер", "SEO", "Офис"])
             f_st = st.selectbox("Статус", ["Запланировано", "В работе", "На проверке", "Готово"])
-            if st.form_submit_button("СОХРАНИТЬ"):
+            if st.form_submit_button("Создать"):
                 v = [f_s, f_t, f_w, "", f_st]
                 while len(v) < len(df.columns): v.append("")
                 new_row = pd.DataFrame([v], columns=df.columns)
                 df = pd.concat([df, new_row], ignore_index=True)
                 conn.update(spreadsheet=url, data=df)
-                st.success("ОК!")
                 st.rerun()
-
-    st.divider()
-
-    colors = {"Готово": "#39FF14", "В работе": "#FFD700", "На проверке": "#00D4FF", "Запланировано": "#8E8E8E"}
-    m_tab, d_tab = st.tabs(["📱 Мобильный вид", "💻 Таблица"])
-
-    with m_tab:
-        for i, r in df.iloc[::-1].iterrows():
-            st_val = str(r.iloc[4]) if len(r) > 4 else "Запланировано"
-            c_c = colors.get(st_val, "#FFFFFF")
-            st.markdown(f"""
-            <div class="task-card" style="border-left-color: {c_c}">
-                <span class="status-badge" style="background-color: {c_c};">{st_val}</span>
-                <div class="section-title">📍 {r.iloc[0]}</div>
-                <div class="task-text">{r.iloc[1]}</div>
-                <div style="color:#58A6FF; font-size:13px;">👤 {r.iloc[2]}</div>
-            </div>
-            """, unsafe_allow_html=True)
-            with st.popover(f"Статус #{i}"):
-                opt = ["Запланировано", "В работе", "На проверке", "Готово"]
-                cur_idx = opt.index(st_val) if st_val in opt else 0
-                new_v = st.radio("Статус:", opt, index=cur_idx, key=f"r{i}")
-                if st.button("Обновить", key=f"b{i}"):
-                    df.iat[i, 4] = new_v
-                    conn.update(spreadsheet=url, data=df)
-                    st.rerun()
-
-    with d_tab:
-        ed_df = st.data_editor(df, use_container_width=True, num_rows="dynamic", key="d_ed")
-        if st.button("💾 СОХРАНИТЬ ТАБЛИЦУ"):
-            conn.update(spreadsheet=url, data=ed_df)
-            st.success("Обновлено!")
