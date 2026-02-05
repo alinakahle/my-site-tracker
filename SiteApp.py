@@ -2,44 +2,35 @@ import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 
-# --- 1. Настройки интерфейса ---
-st.set_page_config(page_title="SiteManager", layout="wide", initial_sidebar_state="collapsed")
+# --- Настройки ---
+st.set_page_config(page_title="Site Tasks", layout="wide")
 
-# Кастомный CSS для «дорогого» вида мобильного приложения
+# CSS для красивых карточек
 st.markdown("""
     <style>
     .stApp { background-color: #F0F2F6 !important; }
     .task-card {
         background: white;
-        padding: 20px;
-        border-radius: 15px;
-        margin-bottom: 15px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-        border-left: 8px solid #ddd;
-    }
-    .status-pill {
-        padding: 4px 12px;
-        border-radius: 20px;
-        font-size: 12px;
-        font-weight: bold;
-        text-transform: uppercase;
-    }
-    /* Крупные кнопки для пальцев */
-    .stButton>button {
-        width: 100%;
+        padding: 15px;
         border-radius: 12px;
-        height: 3em;
-        background-color: #007BFF;
-        color: white;
+        margin-bottom: 10px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        border-left: 6px solid #ddd;
+    }
+    .status-badge {
+        padding: 2px 10px;
+        border-radius: 15px;
+        font-size: 11px;
+        font-weight: bold;
+        float: right;
+        text-transform: uppercase;
     }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. Логика данных ---
 url = "https://docs.google.com/spreadsheets/d/1-Lj3g5ICKsELa1HBZNi2mdZ39WNkHNvFye0vJj3G06Y/edit"
 
-if "auth" not in st.session_state:
-    st.session_state.auth = False
+if "auth" not in st.session_state: st.session_state.auth = False
 
 if not st.session_state.auth:
     st.title("🔐 Вход")
@@ -50,72 +41,62 @@ if not st.session_state.auth:
             st.rerun()
 else:
     conn = st.connection("gsheets", type=GSheetsConnection)
-    # Читаем данные и ПЕРЕИМЕНОВЫВАЕМ для кода, чтобы не было ошибок KeyError
-    raw_df = conn.read(spreadsheet=url, ttl=0).dropna(how="all")
+    # Читаем данные
+    df = conn.read(spreadsheet=url, ttl=0).dropna(how="all")
     
-    # Магия: приводим любые названия колонок к нашим стандартам для работы кода
-    df = raw_df.copy()
-    # Предполагаем порядок: 0-Раздел, 1-Задача, 2-Ответственный, 3-Дедлайн, 4-Статус
-    standard_cols = ["Раздел", "Задача", "Кто", "Срок", "Статус"]
-    # Переименовываем только те, что есть физически
-    mapping = {df.columns[i]: standard_cols[i] for i in range(min(len(df.columns), len(standard_cols)))}
-    df = df.rename(columns=mapping)
+    # Очистка данных от "NaN" (чтобы не было надписей nan в карточках)
+    df = df.fillna("")
 
     st.title("🚀 Site Tasks")
 
-    # --- 3. Форма добавления (Аккордеон) ---
-    with st.expander("➕ СОЗДАТЬ НОВУЮ ЗАДАЧУ"):
-        with st.form("new_task"):
-            col1, col2 = st.columns(2)
-            with col1:
-                f_sec = st.text_input("Где (Раздел)?")
-                f_who = st.selectbox("Кто делает?", ["Алина", "Программист", "Дизайнер", "SEO", "Офис"])
-            with col2:
-                f_date = st.date_input("Дедлайн")
-                f_stat = st.selectbox("Статус", ["Запланировано", "В работе", "На проверке", "Готово"])
-            f_desc = st.text_area("Что конкретно сделать?")
+    # Форма добавления
+    with st.expander("➕ НОВАЯ ЗАДАЧА"):
+        with st.form("add"):
+            c1, c2 = st.columns(2)
+            # Берем названия колонок прямо из твоей таблицы
+            cols = df.columns.tolist()
+            f_sec = st.text_input(cols[0] if len(cols)>0 else "Раздел")
+            f_task = st.text_area(cols[1] if len(cols)>1 else "Задача")
+            f_who = st.selectbox("Кто", ["Алина", "Программист", "Дизайнер", "SEO", "Офис"])
+            f_stat = st.selectbox("Статус", ["Запланировано", "В работе", "На проверке", "Готово"])
             
-            if st.form_submit_button("ОТПРАВИТЬ В ОБЛАКО"):
-                # Собираем строку в оригинальных названиях таблицы
-                new_row = pd.DataFrame([[f_sec, f_desc, f_who, str(f_date), f_stat]], columns=raw_df.columns)
-                updated = pd.concat([raw_df, new_row], ignore_index=True)
+            if st.form_submit_button("СОЗДАТЬ"):
+                new_row = pd.DataFrame([[f_sec, f_task, f_who, "", f_stat]], columns=df.columns)
+                updated = pd.concat([df, new_row], ignore_index=True)
                 conn.update(spreadsheet=url, data=updated)
-                st.success("Задача улетела в Google!")
+                st.success("Добавлено!")
                 st.rerun()
 
-    st.divider()
+    st.subheader("📋 Список задач")
 
-    # --- 4. Список задач в виде КАРТОЧЕК ---
-    st.subheader("Текущий план")
+    colors = {"Готово": "#D4EDDA", "В работе": "#FFF3CD", "На проверке": "#CCE5FF", "Запланировано": "#E2E3E5"}
 
-    colors = {
-        "Готово": "#D4EDDA",      # Зеленый
-        "В работе": "#FFF3CD",    # Желтый
-        "На проверке": "#CCE5FF", # Синий
-        "Запланировано": "#E2E3E5" # Серый
-    }
-
-    # Идем по задачам с конца (самые новые сверху)
+    # Отображение карточек
     for index, row in df.iloc[::-1].iterrows():
-        status = str(row.get("Статус", "Запланировано"))
-        card_color = colors.get(status, "#FFFFFF")
+        # Берем данные по порядку колонок: 0 - Раздел, 1 - Задача, 2 - Кто, 4 - Статус
+        # Используем .iloc для надежности, чтобы не зависеть от имен
+        r_sec = row.iloc[0] if len(row) > 0 else ""
+        r_task = row.iloc[1] if len(row) > 1 else ""
+        r_who = row.iloc[2] if len(row) > 2 else ""
+        r_stat = row.iloc[4] if len(row) > 4 else "Запланировано"
         
-        # Рендерим карточку
+        card_color = colors.get(r_stat, "#FFFFFF")
+
         st.markdown(f"""
             <div class="task-card" style="border-left-color: {card_color}">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <span style="color: #6c757d; font-size: 0.8em; font-weight: bold;">📍 {row.get('Раздел', '---')}</span>
-                    <span class="status-pill" style="background-color: {card_color};">{status}</span>
-                </div>
-                <div style="margin: 10px 0; font-size: 1.1em; line-height: 1.4;">{row.get('Задача', 'Без описания')}</div>
-                <div style="color: #495057; font-size: 0.9em;">👤 <b>{row.get('Кто', 'Не назначен')}</b></div>
+                <span class="status-badge" style="background-color: {card_color};">{r_stat}</span>
+                <div style="color: #888; font-size: 12px; font-weight: bold;">📍 {r_sec}</div>
+                <div style="margin: 8px 0; font-size: 15px; color: #333;">{r_task}</div>
+                <div style="font-size: 13px; color: #555;">👤 {r_who}</div>
             </div>
         """, unsafe_allow_html=True)
         
-        # Кнопка быстрой смены статуса (для мобилки)
-        with st.popover(f"Изменить статус"):
-            new_s = st.radio("Новый статус:", ["Запланировано", "В работе", "На проверке", "Готово"], 
-                             index=["Запланировано", "В работе", "На проверке", "Готово"].index(status) if status in ["Запланировано", "В работе", "На проверке", "Готово"] else 0,
-                             key=f"rad_{index}")
+        with st.popover("Изменить статус"):
+            new_s = st.radio("Статус:", ["Запланировано", "В работе", "На проверке", "Готово"], 
+                             index=["Запланировано", "В работе", "На проверке", "Готово"].index(r_stat) if r_stat in ["Запланировано", "В работе", "На проверке", "Готово"] else 0,
+                             key=f"st_{index}")
             if st.button("Обновить", key=f"btn_{index}"):
-                raw_df.iat[index, -1] = new_s # Меняем в последней колонке
+                # Обновляем именно в той колонке, где лежит статус (обычно 4-я или 5-я)
+                df.iat[index, 4] = new_s 
+                conn.update(spreadsheet=url, data=df)
+                st.rerun()
