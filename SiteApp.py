@@ -3,87 +3,55 @@ from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 
 # 1. Настройка страницы
-st.set_page_config(page_title="Премиум Мониторинг Задач", layout="wide")
+st.set_page_config(page_title="Site Manager Pro", layout="wide")
 
-# 2. Премиум CSS
+# 2. Премиум Канбан CSS
 st.markdown("""
     <style>
-    /* Общий фон: темный градиент для премиум вида */
-    .stApp {
-        background: linear-gradient(to right, #1a1a2e, #16213e);
-        color: #e0e0e0; /* Светлый текст */
+    .stApp { background-color: #0f1116; color: #ffffff; }
+    
+    /* Стили колонок канбана */
+    .kanban-column {
+        background: rgba(255, 255, 255, 0.03);
+        border-radius: 15px;
+        padding: 15px;
+        min-height: 80vh;
+        border: 1px solid rgba(255, 255, 255, 0.05);
     }
-    /* Заголовки */
-    h1, h2, h3, .st-emotion-cache-nahz7x {
-        color: #e0e0e0 !important;
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        font-weight: 700;
-        letter-spacing: 1px;
+    
+    .column-header {
+        text-align: center;
+        font-weight: 800;
+        font-size: 1.1em;
+        margin-bottom: 20px;
+        padding-bottom: 10px;
+        border-bottom: 2px solid;
     }
-    /* Карточки задач */
+    
+    /* Стили карточек */
     .task-card {
-        background-color: #2a3950; /* Темно-синий фон */
-        padding: 20px 25px;
+        background: #1c1e26;
+        padding: 18px;
         border-radius: 12px;
-        margin-bottom: 15px;
-        box-shadow: 0 6px 15px rgba(0, 0, 0, 0.3); /* Глубокая тень */
-        border-left: 6px solid; /* Цветная полоска слева */
-        transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+        margin-bottom: 12px;
+        border-left: 5px solid;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        transition: 0.3s;
     }
-    .task-card:hover {
-        transform: translateY(-3px); /* Эффект при наведении */
-        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.4);
-    }
-    /* Заголовок в карточке */
-    .card-title {
-        font-size: 1.2em;
-        font-weight: 600;
-        color: #ffffff; /* Белый текст */
-        margin-bottom: 8px;
-    }
-    /* Детали в карточке */
-    .card-detail {
-        font-size: 0.9em;
-        color: #a0a0a0; /* Более светлый текст для деталей */
-        margin-bottom: 4px;
-    }
-    /* Стиль для статуса */
-    .status-badge {
-        display: inline-block;
-        padding: 6px 12px;
-        border-radius: 20px;
-        font-size: 0.85em;
-        font-weight: 700;
-        color: #1a1a2e; /* Темный текст на ярком фоне */
-        margin-top: 10px;
-        float: right; /* Статус справа */
-        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
-    }
+    .task-card:hover { transform: scale(1.02); }
+    
+    .task-title { font-weight: 700; color: #fff; margin-bottom: 8px; font-size: 1em; }
+    .task-meta { color: #8b949e; font-size: 0.85em; }
+    .task-user { color: #58a6ff; font-weight: 600; font-size: 0.85em; margin-top: 10px; }
+
     /* Боковая панель */
-    [data-testid="stSidebar"] {
-        background: linear-gradient(to bottom, #2a3950, #16213e); /* Градиент */
-        color: #e0e0e0;
-        padding: 20px;
-        box-shadow: 2px 0 10px rgba(0,0,0,0.3);
-    }
-    .stSidebar h2 { color: #ffffff !important; }
-    .stSidebar .stSelectbox label, .stSidebar .stTextInput label, .stSidebar .stTextArea label {
-        color: #a0a0a0 !important;
-    }
-    .stSidebar .stButton>button {
-        background-color: #00bcd4; /* Яркая кнопка */
-        color: #1a1a2e;
-        font-weight: bold;
-        border: none;
-        padding: 10px 20px;
-        border-radius: 8px;
-        transition: background-color 0.2s;
-    }
-    .stSidebar .stButton>button:hover { background-color: #00acc1; }
+    [data-testid="stSidebar"] { background-color: #161b22; border-right: 1px solid #30363d; }
+    .stButton>button { background: #238636; color: white; border: none; width: 100%; border-radius: 8px; }
     </style>
     """, unsafe_allow_html=True)
 
 URL = "https://docs.google.com/spreadsheets/d/1-Lj3g5ICKsELa1HBZNi2mdZ39WNkHNvFye0vJj3G06Y/edit"
+SHEET_NAME = "Tasks"
 
 if "auth" not in st.session_state:
     st.session_state.auth = False
@@ -100,98 +68,75 @@ else:
     conn = st.connection("gsheets", type=GSheetsConnection)
     if "df" not in st.session_state:
         try:
-            st.session_state.df = conn.read(spreadsheet=URL, ttl=0).dropna(how="all").fillna("")
+            st.session_state.df = conn.read(spreadsheet=URL, worksheet=SHEET_NAME, ttl=0).dropna(how="all").fillna("")
         except:
-            st.error("Ошибка загрузки данных из Google.")
+            st.error("Ошибка загрузки данных. Проверьте лист 'Tasks'")
             st.stop()
+    
     df = st.session_state.df
 
-    # --- БОКОВАЯ ПАНЕЛЬ (ПРЕМИУМ) ---
+    # --- БОКОВАЯ ПАНЕЛЬ (ДОБАВЛЕНИЕ) ---
     with st.sidebar:
-        st.title("✨ Новая задача")
-        st.markdown("---") # Разделитель
-        
-        with st.form("sidebar_form", clear_on_submit=True):
-            f_sec = st.text_input("Раздел сайта")
-            f_task = st.text_area("Что сделать?")
+        st.title("➕ Создать задачу")
+        with st.form("new_task", clear_on_submit=True):
+            f_sec = st.text_input("Раздел")
+            f_task = st.text_area("Описание")
             f_who = st.selectbox("Ответственный", ["Алина", "Программист", "Дизайнер", "SEO", "Офис"])
-            f_stat = st.selectbox("Статус", ["Запланировано", "В работе", "На проверке", "Готово"])
+            f_stat = st.selectbox("Этап", ["Запланировано", "В работе", "Готово"])
             
-            if st.form_submit_button("Добавить задачу"):
-                new_row = {col: "" for col in df.columns}
-                cols = df.columns.tolist()
-                
-                # Заполняем по порядку колонок (предполагая, что они в таком порядке)
-                if len(cols) > 0: new_row[cols[0]] = f_sec
-                if len(cols) > 1: new_row[cols[1]] = f_task
-                if len(cols) > 2: new_row[cols[2]] = f_who
-                if len(cols) > 4: new_row[cols[4]] = f_stat # Индекс 4 для "Статус"
-                
-                new_df = pd.DataFrame([new_row])
-                st.session_state.df = pd.concat([df, new_df], ignore_index=True)
-                
-                try:
-                    conn.update(spreadsheet=URL, data=st.session_state.df)
-                    st.success("Задача добавлена и сохранена!")
-                except Exception as e:
-                    st.warning(f"Ошибка сохранения в Google: {e}. Задача добавлена только в приложение.")
+            if st.form_submit_button("ДОБАВИТЬ"):
+                new_row = {df.columns[0]: f_sec, df.columns[1]: f_task, df.columns[2]: f_who, df.columns[4]: f_stat}
+                st.session_state.df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+                conn.update(spreadsheet=URL, worksheet=SHEET_NAME, data=st.session_state.df)
                 st.rerun()
 
-    # --- ГЛАВНЫЙ ЭКРАН (ПРЕМИУМ КАРТОЧКИ) ---
-    st.title("🌟 Мониторинг Задач")
+    # --- КАНБАН ДОСКА ---
+    st.title("🎯 Kanban Board")
     
-    # Кнопка обновления из Google
+    # Кнопка синхронизации
     if st.button("🔄 Обновить из Google"):
         del st.session_state.df
         st.rerun()
 
-    st.markdown("---") # Разделитель
-    
-    # Цвета для статусов (яркие)
-    status_colors = {
-        "Готово": "#28a745",       # Зеленый
-        "В работе": "#ffc107",     # Желтый
-        "На проверке": "#007bff",  # Синий
-        "Запланировано": "#6c757d" # Серый
-    }
+    # Разделяем на 3 колонки
+    col1, col2, col3 = st.columns(3)
 
-    # Отображение данных в виде карточек
-    for index, row in st.session_state.df.iloc[::-1].iterrows(): # Сортируем от новых к старым
-        # Убедимся, что индексы существуют
-        section = str(row.iloc[0]) if len(row) > 0 else "N/A"
-        task = str(row.iloc[1]) if len(row) > 1 else "N/A"
-        who = str(row.iloc[2]) if len(row) > 2 else "N/A"
-        status_val = str(row.iloc[4]) if len(row) > 4 else "Запланировано" # Предполагаем, что статус 5-я колонка (индекс 4)
-        
-        # Получаем цвет для статуса
-        color = status_colors.get(status_val, "#f8f9fa")
+    stages = [
+        {"name": "Запланировано", "color": "#6c757d", "column": col1},
+        {"name": "В работе", "color": "#ffc107", "column": col2},
+        {"name": "Готово", "color": "#28a745", "column": col3}
+    ]
 
-        st.markdown(f"""
-            <div class="task-card" style="border-left-color: {color};">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <div class="card-title">{task}</div>
-                    <span class="status-badge" style="background-color: {color};">{status_val}</span>
+    for stage in stages:
+        with stage["column"]:
+            # Фильтруем задачи для текущей колонки
+            tasks = df[df.iloc[:, 4] == stage["name"]]
+            
+            st.markdown(f"""
+                <div class="column-header" style="border-color: {stage['color']}; color: {stage['color']};">
+                    {stage['name'].upper()} ({len(tasks)})
                 </div>
-                <div class="card-detail">📍 **Раздел:** {section}</div>
-                <div class="card-detail">👤 **Ответственный:** {who}</div>
-            </div>
-        """, unsafe_allow_html=True)
-        
-        # Инструменты для редактирования статуса (внутри popover)
-        with st.popover(f"⚙️ Изменить статус"):
-            new_s = st.radio("Новый статус:", 
-                             ["Запланировано", "В работе", "На проверке", "Готово"], 
-                             index=["Запланировано", "В работе", "На проверке", "Готово"].index(status_val) if status_val in status_colors else 0,
-                             key=f"popover_status_{index}")
-            if st.button("Обновить", key=f"update_btn_{index}"):
-                st.session_state.df.iat[index, 4] = new_s # Обновляем 5-ю колонку
+                """, unsafe_allow_html=True)
+            
+            for idx, row in tasks.iterrows():
+                # Отрисовка карточки
+                st.markdown(f"""
+                    <div class="task-card" style="border-left-color: {stage['color']};">
+                        <div class="task-title">{row.iloc[1]}</div>
+                        <div class="task-meta">📍 {row.iloc[0]}</div>
+                        <div class="task-user">👤 {row.iloc[2]}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
                 
-                try:
-                    conn.update(spreadsheet=URL, data=st.session_state.df)
-                    st.success("Статус обновлен и сохранен!")
-                except Exception as e:
-                    st.warning(f"Ошибка сохранения статуса в Google: {e}. Обновлено только в приложении.")
-                st.rerun()
+                # Кнопка смены статуса (компактная)
+                with st.popover("Сменить этап", key=f"pop_{idx}"):
+                    new_s = st.radio("Куда переместить?", ["Запланировано", "В работе", "Готово"], 
+                                     index=["Запланировано", "В работе", "Готово"].index(stage["name"]),
+                                     key=f"rad_{idx}")
+                    if st.button("Переместить", key=f"btn_{idx}"):
+                        st.session_state.df.iat[idx, 4] = new_s
+                        conn.update(spreadsheet=URL, worksheet=SHEET_NAME, data=st.session_state.df)
+                        st.rerun()
 
-    st.markdown("---")
-    st.caption("Данные обновляются из Google при входе и сохранении.")
+    st.divider()
+    st.caption("Site Manager Pro v2.0 | Синхронизировано с Google Sheets")
