@@ -2,65 +2,69 @@ import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 
-# 1. Настройки страницы
-st.set_page_config(page_title="Site Task Tracker", layout="wide")
+# 1. Настройки
+st.set_page_config(page_title="Site Tracker", layout="wide")
 
-# 2. Ссылка на таблицу
-url = "https://docs.google.com/spreadsheets/d/1-Lj3g5ICKsELa1HBZNi2mdZ39WNkHNvFye0vJj3G06Y/edit#gid=0"
+# Укажи здесь точное название своего листа в Google Таблице (внизу на вкладке)
+SHEET_NAME = "Общая" 
+URL = "https://docs.google.com/spreadsheets/d/1-Lj3g5ICKsELa1HBZNi2mdZ39WNkHNvFye0vJj3G06Y/edit#gid=0"
 
 if "auth" not in st.session_state:
     st.session_state.auth = False
 
 if not st.session_state.auth:
     st.title("🔐 Вход")
-    pwd = st.text_input("Введите пароль:", type="password")
+    pwd = st.text_input("Пароль:", type="password")
     if st.button("Войти"):
         if pwd == "12345":
             st.session_state.auth = True
             st.rerun()
 else:
-    # Соединение с Google Sheets
+    # Соединение
     conn = st.connection("gsheets", type=GSheetsConnection)
-    df = conn.read(spreadsheet=url, ttl=0).dropna(how="all").fillna("")
+    
+    # Читаем данные
+    df = conn.read(spreadsheet=URL, worksheet=SHEET_NAME, ttl=0).dropna(how="all").fillna("")
 
-    # --- БОКОВАЯ ПАНЕЛЬ ДЛЯ ВВОДА ---
+    # --- БОКОВАЯ ПАНЕЛЬ ---
     with st.sidebar:
         st.header("➕ Новая задача")
-        with st.form("sidebar_form", clear_on_submit=True):
-            new_sec = st.text_input("Раздел сайта")
-            new_task = st.text_area("Что нужно сделать?")
-            new_who = st.selectbox("Ответственный", ["Алина", "Программист", "Дизайнер", "SEO", "Офис"])
-            new_stat = st.selectbox("Статус", ["Запланировано", "В работе", "На проверке", "Готово"])
+        with st.form("add_form", clear_on_submit=True):
+            f_sec = st.text_input("Раздел сайта")
+            f_task = st.text_area("Что нужно сделать?")
+            f_who = st.selectbox("Ответственный", ["Алина", "Программист", "Дизайнер", "SEO", "Офис"])
+            f_stat = st.selectbox("Статус", ["Запланировано", "В работе", "На проверке", "Готово"])
             
             if st.form_submit_button("Добавить в список"):
-                # Создаем новую строку
-                new_data = [new_sec, new_task, new_who, "", new_stat]
-                # Выравниваем количество колонок
-                while len(new_data) < len(df.columns):
-                    new_data.append("")
+                # Создаем пустую строку по размеру твоей таблицы
+                new_row_data = {col: "" for col in df.columns}
                 
-                new_row = pd.DataFrame([new_data], columns=df.columns)
-                df = pd.concat([df, new_row], ignore_index=True)
+                # Заполняем только те поля, что ввели (привязка по названиям колонок)
+                # Если названия колонок в Google другие, код подстроится под порядок
+                col_list = df.columns.tolist()
+                if len(col_list) > 1: new_row_data[col_list[1]] = f_sec  # Раздел сайта
+                if len(col_list) > 2: new_row_data[col_list[2]] = f_task # Задача
+                if len(col_list) > 3: new_row_data[col_list[3]] = f_who  # Ответственный
+                if len(col_list) > 7: new_row_data[col_list[7]] = f_stat # Статус
                 
-                # Сохраняем и обновляем
-                conn.update(spreadsheet=url, data=df)
-                st.success("Задача добавлена!")
+                new_row_df = pd.DataFrame([new_row_data])
+                updated_df = pd.concat([df, new_row_df], ignore_index=True)
+                
+                # Сохранение с явным указанием листа
+                conn.update(spreadsheet=URL, worksheet=SHEET_NAME, data=updated_df)
+                st.success("Задача добавлена в таблицу!")
                 st.rerun()
 
-    # --- ОСНОВНАЯ ЧАСТЬ (ТАБЛИЦА) ---
-    st.title("📋 Список задач из Google")
-
-    # Редактор таблицы
+    # --- ОСНОВНАЯ ТАБЛИЦА ---
+    st.title("📋 Список задач")
+    
     edited_df = st.data_editor(
         df, 
         use_container_width=True, 
         num_rows="dynamic",
-        key="main_table"
+        key="editor"
     )
 
-    # Кнопка сохранения изменений в самой таблице
-    if st.button("💾 Сохранить изменения в таблице"):
-        conn.update(spreadsheet=url, data=edited_df)
-        st.success("Изменения синхронизированы с Google!")
-
-    st.info("💡 Таблица справа, а форма добавления — в выезжающем меню слева (Sidebar).")
+    if st.button("💾 Сохранить все изменения таблицы"):
+        conn.update(spreadsheet=URL, worksheet=SHEET_NAME, data=edited_df)
+        st.success("Все изменения сохранены!")
