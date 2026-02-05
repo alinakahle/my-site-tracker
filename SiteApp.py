@@ -2,12 +2,11 @@ import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 
-# 1. Настройки
+# 1. Настройки страницы
 st.set_page_config(page_title="Site Tracker", layout="wide")
 
-# Прямая ссылка на таблицу (убрали хвостик gid, чтобы он не мешал)
+# Прямая ссылка на таблицу
 URL = "https://docs.google.com/spreadsheets/d/1-Lj3g5ICKsELa1HBZNi2mdZ39WNkHNvFye0vJj3G06Y/edit"
-SHEET_NAME = "Tasks"
 
 if "auth" not in st.session_state:
     st.session_state.auth = False
@@ -22,38 +21,52 @@ if not st.session_state.auth:
 else:
     conn = st.connection("gsheets", type=GSheetsConnection)
     
-    # Пытаемся прочитать данные
+    # Пытаемся прочитать ПЕРВЫЙ доступный лист (без указания имени)
     try:
-        # Читаем именно лист Tasks
-        df = conn.read(spreadsheet=URL, worksheet=SHEET_NAME, ttl=0).dropna(how="all").fillna("")
+        df = conn.read(spreadsheet=URL, ttl=0).dropna(how="all").fillna("")
     except Exception as e:
-        st.error(f"Ошибка: Лист '{SHEET_NAME}' не найден. Проверьте название вкладки в Google Таблице!")
+        st.error(f"Не удалось подключиться: {e}")
         st.stop()
 
-    # --- Боковая панель ---
+    # --- БОКОВОЕ МЕНЮ (SideBar) ---
     with st.sidebar:
         st.header("➕ Новая задача")
-        with st.form("add_task", clear_on_submit=True):
-            f_sec = st.text_input("Раздел")
-            f_task = st.text_area("Задача")
+        with st.form("add_form", clear_on_submit=True):
+            f_sec = st.text_input("Раздел сайта")
+            f_task = st.text_area("Что сделать?")
             f_who = st.selectbox("Кто", ["Алина", "Программист", "Дизайнер", "SEO", "Офис"])
             f_stat = st.selectbox("Статус", ["Запланировано", "В работе", "На проверке", "Готово"])
             
-            if st.form_submit_button("Добавить"):
-                # Создаем новую строку, сопоставляя с колонками в Google
-                new_row_dict = {df.columns[i]: val for i, val in enumerate([f_sec, f_task, f_who, "", f_stat]) if i < len(df.columns)}
-                new_row_df = pd.DataFrame([new_row_dict])
+            if st.form_submit_button("Добавить в таблицу"):
+                # Создаем пустую строку с колонками как в таблице
+                new_data = {col: "" for col in df.columns}
+                cols = df.columns.tolist()
                 
+                # Заполняем данными по порядку колонок (как на твоем скриншоте)
+                if len(cols) > 1: new_data[cols[1]] = f_sec
+                if len(cols) > 2: new_data[cols[2]] = f_task
+                if len(cols) > 3: new_data[cols[3]] = f_who
+                if len(cols) > 8: new_data[cols[8]] = f_stat
+                
+                new_row_df = pd.DataFrame([new_data])
                 updated_df = pd.concat([df, new_row_df], ignore_index=True)
-                conn.update(spreadsheet=URL, worksheet=SHEET_NAME, data=updated_df)
+                
+                # Сохраняем (тоже без указания имени листа, в первый попавшийся)
+                conn.update(spreadsheet=URL, data=updated_df)
                 st.success("Задача добавлена!")
                 st.rerun()
 
-    # --- Основной экран ---
-    st.title("📋 Мониторинг задач")
+    # --- ГЛАВНЫЙ ЭКРАН (Таблица) ---
+    st.title("📋 Список задач")
     
-    edited_df = st.data_editor(df, use_container_width=True, num_rows="dynamic", key="editor")
+    # Тот самый редактор таблицы, который тебе нравился
+    edited_df = st.data_editor(
+        df, 
+        use_container_width=True, 
+        num_rows="dynamic",
+        key="main_editor"
+    )
 
-    if st.button("💾 Сохранить всё"):
-        conn.update(spreadsheet=URL, worksheet=SHEET_NAME, data=edited_df)
-        st.success("Сохранено!")
+    if st.button("💾 Сохранить все изменения"):
+        conn.update(spreadsheet=URL, data=edited_df)
+        st.success("Данные успешно синхронизированы!")
