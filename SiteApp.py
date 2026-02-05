@@ -1,66 +1,100 @@
 import streamlit as st
+from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 
 # 1. Настройка страницы
-st.set_page_config(page_title="Site Manager Pro", layout="wide")
+st.set_page_config(page_title="Site Manager Kanban", layout="wide")
 
-# 2. ПРЯМАЯ ССЫЛКА (Важно: замени /edit на /export?format=csv)
-# Твоя ссылка: https://docs.google.com/spreadsheets/d/1-Lj3g5ICKsELa1HBZNi2mdZ39WNkHNvFye0vJj3G06Y/edit
-# Превращаем её в ссылку для прямого скачивания данных:
-SHEET_ID = "1-Lj3g5ICKsELa1HBZNi2mdZ39WNkHNvFye0vJj3G06Y"
-CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv"
+# 2. Подключение к Google Sheets через секреты
+# Название соединения должно совпадать с тем, что в Secrets: [connections.gsheets]
+conn = st.connection("gsheets", type=GSheetsConnection)
 
-# 3. Стильный Канбан CSS
+# 3. Стиль "Премиум Канбан"
 st.markdown("""
     <style>
-    .stApp { background-color: #0f1116; color: #ffffff; }
-    .kanban-column { background: rgba(255, 255, 255, 0.03); border-radius: 15px; padding: 15px; min-height: 70vh; }
-    .column-header { text-align: center; font-weight: 800; border-bottom: 2px solid; margin-bottom: 20px; padding-bottom: 10px; }
-    .task-card { background: #1c1e26; padding: 15px; border-radius: 12px; margin-bottom: 12px; border-left: 5px solid; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
-    .task-title { font-weight: 700; color: #fff; margin-bottom: 5px; }
-    .task-meta { color: #8b949e; font-size: 0.85em; }
+    .stApp { background-color: #0d1117; color: #e6edf3; }
+    h3 { color: #58a6ff !important; border-bottom: 2px solid #30363d; padding-bottom: 10px; }
+    .task-card { 
+        background-color: #161b22; 
+        border: 1px solid #30363d; 
+        border-radius: 8px; 
+        padding: 15px; 
+        margin-bottom: 15px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+    }
+    .task-card:hover { border-color: #58a6ff; }
+    .task-title { font-weight: bold; font-size: 1.1em; color: #f0f6fc; }
+    .task-desc { font-size: 0.9em; color: #8b949e; margin: 5px 0; }
+    .task-who { font-size: 0.8em; color: #1f6feb; font-weight: 600; }
     </style>
     """, unsafe_allow_html=True)
 
-# 4. Загрузка данных (Простой способ без секретов)
-@st.cache_data(ttl=10) # Обновление каждые 10 секунд
-def load_data():
-    return pd.read_csv(CSV_URL).dropna(how="all").fillna("")
-
+# 4. Загрузка данных (Лист должен называться "Tasks")
 try:
-    df = load_data()
+    # Очищаем кэш принудительно, чтобы увидеть изменения
+    df = conn.read(worksheet="Tasks", ttl=0).dropna(how="all").fillna("")
     
-    st.title("🎯 Kanban Board")
+    st.title("🎯 Мониторинг задач (Kanban)")
 
-    # Разделяем на 3 колонки
-    col1, col2, col3 = st.columns(3)
+    # Создаем 3 колонки для Канбана
+    stages = ["Запланировано", "В работе", "Готово"]
+    cols = st.columns(3)
 
-    # Определяем этапы (проверь, чтобы названия в таблице были такими же!)
-    stages = [
-        {"name": "Запланировано", "color": "#6c757d", "column": col1},
-        {"name": "В работе", "color": "#ffc107", "column": col2},
-        {"name": "Готово", "color": "#28a745", "column": col3}
-    ]
-
-    for stage in stages:
-        with stage["column"]:
-            st.markdown(f'<div class="column-header" style="border-color: {stage["color"]}; color: {stage["color"]};">{stage["name"].upper()}</div>', unsafe_allow_html=True)
+    for i, stage in enumerate(stages):
+        with cols[i]:
+            st.markdown(f"### {stage}")
             
-            # Фильтруем (Статус должен быть в 5-й колонке по счету)
-            # Если в таблице колонки называются иначе, поменяй df.columns[4]
-            tasks = df[df[df.columns[4]] == stage["name"]]
+            # Фильтруем задачи (Статус в 5-й колонке, индекс 4)
+            # Если у тебя статус в другой колонке, поменяй цифру 4 ниже
+            tasks = df[df.iloc[:, 4] == stage]
             
             for idx, row in tasks.iterrows():
-                st.markdown(f"""
-                    <div class="task-card" style="border-left-color: {stage['color']};">
+                with st.container():
+                    st.markdown(f"""
+                    <div class="task-card">
                         <div class="task-title">{row.iloc[1]}</div>
-                        <div class="task-meta">📍 {row.iloc[0]}</div>
-                        <div style="color: #58a6ff; font-weight: 600; font-size: 0.85em; margin-top: 5px;">👤 {row.iloc[2]}</div>
+                        <div class="task-desc">📍 {row.iloc[0]}</div>
+                        <div class="task-who">👤 {row.iloc[2]}</div>
                     </div>
-                """, unsafe_allow_html=True)
+                    """, unsafe_allow_html=True)
+                    
+                    # Кнопка смены статуса
+                    with st.popover("🚀 Сменить этап"):
+                        new_status = st.radio(
+                            "Переместить в:", 
+                            stages, 
+                            index=stages.index(stage),
+                            key=f"move_{idx}"
+                        )
+                        if new_status != stage:
+                            df.iat[idx, 4] = new_status
+                            conn.update(worksheet="Tasks", data=df)
+                            st.success("Перемещено!")
+                            st.rerun()
+
+    # --- БОКОВАЯ ПАНЕЛЬ ДЛЯ НОВЫХ ЗАДАЧ ---
+    with st.sidebar:
+        st.header("✨ Создать задачу")
+        with st.form("add_task_form", clear_on_submit=True):
+            new_sec = st.text_input("Раздел сайта")
+            new_task = st.text_area("Что сделать?")
+            new_who = st.selectbox("Ответственный", ["Алина", "Программист", "Дизайнер", "SEO", "Офис"])
+            
+            if st.form_submit_button("Добавить в Канбан"):
+                # Создаем строку по формату таблицы (5 колонок)
+                new_row = [new_sec, new_task, new_who, "", "Запланировано"]
+                
+                # Добавляем пустые ячейки, если колонок в Google больше
+                while len(new_row) < len(df.columns):
+                    new_row.append("")
+                
+                new_df = pd.DataFrame([new_row], columns=df.columns)
+                updated_df = pd.concat([df, new_df], ignore_index=True)
+                
+                conn.update(worksheet="Tasks", data=updated_df)
+                st.sidebar.success("Задача добавлена!")
+                st.rerun()
 
 except Exception as e:
-    st.error("Пока не удалось подгрузить данные. Проверь, что в Google Таблице включен доступ 'Все, у кого есть ссылка - Редактор'.")
-    st.info("Также убедись, что твоя таблица не пустая.")
-
-st.sidebar.info("Этот режим работает только на просмотр, так как мы используем упрощенный доступ без паролей и ключей.")
+    st.error(f"Ошибка связи с таблицей: {e}")
+    st.info("Проверьте, что в Google Таблице есть лист с названием 'Tasks' и у сервисного аккаунта есть доступ 'Редактор'.")
