@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import datetime, date
 
 # 1. Системные настройки
-st.set_page_config(page_title="Task Flow Pro 2026", layout="wide")
+st.set_page_config(page_title="D² DOM Development", layout="wide")
 
 # 2. Подключение к Google Sheets
 conn = st.connection("gsheets", type=GSheetsConnection)
@@ -53,14 +53,9 @@ st.markdown("""
 
     div[data-testid="stSegmentedControl"] button { background: white !important; border: 1px solid #D2D2D7 !important; }
     div[data-testid="stSegmentedControl"] button[aria-checked="true"] { background: #007AFF !important; color: white !important; }
-
-    /* Стили для метрик в сайдбаре */
-    [data-testid="stMetric"] {
-        background-color: #F8F9FA;
-        padding: 10px;
-        border-radius: 10px;
-        border: 1px solid #E0E0E0;
-    }
+    
+    /* Специфичные стили для сайдбара */
+    [data-testid="stSidebar"] h2 { font-size: 1.2rem !important; margin-bottom: 10px !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -71,95 +66,80 @@ def get_time_styles(days):
     return "t-red", "b-red"
 
 try:
-    # Загрузка данных
     df = conn.read(ttl=0).dropna(how="all").fillna("")
     
-    # --- SIDEBAR (Статистика + Создание) ---
+    # --- SIDEBAR (Создание ВЫШЕ, Статистика НИЖЕ) ---
     with st.sidebar:
-        st.markdown("## 📊 Статистика проекта")
-        # Считаем количество задач
-        count_working = len(df[df['Статус'] == "В работе"])
-        count_planned = len(df[df['Статус'] == "Запланировано"])
-        count_done = len(df[df['Статус'] == "Готово"])
-
-        with st.container(border=True):
-            col_m1, col_m2 = st.columns(2)
-            with col_m1:
-                st.metric("🔥 В работе", count_working)
-                st.metric("✅ Готово", count_done)
-            with col_m2:
-                st.metric("⏳ План", count_planned)
-                st.metric("📦 Всего", len(df))
-
-        st.markdown("---")
         st.markdown("## ✨ Новая задача")
         with st.form("add_task_form", clear_on_submit=True):
-            new_title = st.text_input("Название задачи")
-            new_sec = st.text_input("Раздел сайта")
-            new_who = st.selectbox("Исполнитель", [k for k in STAFF_CONFIG.keys() if k != "Все"])
-            new_date = st.date_input("Когда поставлена?", value=date.today())
-            submit = st.form_submit_button("Добавить в план", use_container_width=True)
-            
-            if submit and new_title:
+            n_title = st.text_input("Название задачи")
+            n_sec = st.text_input("Раздел сайта")
+            n_who = st.selectbox("Исполнитель", [k for k in STAFF_CONFIG.keys() if k != "Все"])
+            n_date = st.date_input("Дата постановки", value=date.today())
+            if st.form_submit_button("Добавить в план", use_container_width=True) and n_title:
                 new_row = {
-                    "Раздел сайта": new_sec, 
-                    "Задача": new_title, 
-                    "Ответственный": new_who,
-                    "Начало": new_date.strftime("%d.%m.%Y"),
-                    "Статус": "Запланировано"
+                    "Раздел сайта": n_sec, "Задача": n_title, "Ответственный": n_who,
+                    "Начало": n_date.strftime("%d.%m.%Y"), "Статус": "Запланировано"
                 }
                 df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
                 conn.update(data=df)
-                st.toast(f"Задача добавлена!", icon="✅")
+                st.toast("Задача сохранена!", icon="✅")
                 st.rerun()
 
-    # --- MAIN UI ---
-    st.markdown("# 🚀 Task Flow Control")
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown("## 📊 Статистика D² DOM")
+        c_work = len(df[df['Статус'] == "В работе"])
+        c_plan = len(df[df['Статус'] == "Запланировано"])
+        c_done = len(df[df['Статус'] == "Готово"])
 
-    staff_options = list(STAFF_CONFIG.keys())
-    selected_staff = st.segmented_control(
-        "Команда:", options=staff_options,
+        with st.container(border=True):
+            m1, m2 = st.columns(2)
+            m1.metric("🔥 В работе", c_work)
+            m1.metric("✅ Готово", c_done)
+            m2.metric("⏳ План", c_plan)
+            m2.metric("📦 Всего", len(df))
+
+    # --- MAIN UI ---
+    st.markdown("# 🚀 разработка сайта D² DOM")
+
+    sel_staff = st.segmented_control(
+        "Команда:", options=list(STAFF_CONFIG.keys()),
         format_func=lambda x: f"{STAFF_CONFIG[x]['emoji']} {x}",
         default="Все"
     )
 
-    tabs = st.tabs(["🔥 В работе", "⏳ В планах", "✅ Завершено"])
-    status_list = ["В работе", "Запланировано", "Готово"]
+    tabs = st.tabs(["🔥 В работе", "⏳ Очередь", "✅ Выполнено"])
+    st_list = ["В работе", "Запланировано", "Готово"]
 
     for i, tab in enumerate(tabs):
-        current_status = status_list[i]
+        curr_st = st_list[i]
         with tab:
-            filtered = df[df['Статус'] == current_status]
-            if selected_staff != "Все":
-                filtered = filtered[filtered['Ответственный'] == selected_staff]
+            filtered = df[df['Статус'] == curr_st]
+            if sel_staff != "Все":
+                filtered = filtered[filtered['Ответственный'] == sel_staff]
 
             if filtered.empty:
-                st.info(f"Задач в статусе '{current_status}' нет.")
+                st.info(f"В этой категории задач нет.")
             else:
                 for idx, row in filtered.iterrows():
                     try:
-                        start_dt = datetime.strptime(str(row['Начало']).strip(), "%d.%m.%Y").date()
-                        days_count = (date.today() - start_dt).days
-                    except: days_count = 0
+                        d_start = datetime.strptime(str(row['Начало']).strip(), "%d.%m.%Y").date()
+                        days = (date.today() - d_start).days
+                    except: days = 0
                     
                     theme = STAFF_CONFIG.get(row['Ответственный'], STAFF_CONFIG["Все"])
-                    chip_cls, bar_cls = get_time_styles(days_count)
-                    progress_pct = min((days_count / 30) * 100, 100)
+                    chip_c, bar_c = get_time_styles(days)
+                    pct = min((days / 30) * 100, 100)
 
                     with st.container(border=True):
-                        c_title, c_action = st.columns([0.7, 0.3])
-                        with c_title:
-                            st.markdown(f'<div class="task-title">{row["Задача"]}</div>', unsafe_allow_html=True)
-                        with c_action:
-                            new_val = st.selectbox(
-                                "Статус", status_list, 
-                                index=status_list.index(current_status),
-                                key=f"move_{idx}", label_visibility="collapsed"
-                            )
-                            if new_val != current_status:
-                                df.at[idx, 'Статус'] = new_val
-                                conn.update(data=df)
-                                st.rerun()
+                        col_t, col_s = st.columns([0.7, 0.3])
+                        col_t.markdown(f'<div class="task-title">{row["Задача"]}</div>', unsafe_allow_html=True)
+                        
+                        new_status = col_s.selectbox("Статус", st_list, index=st_list.index(curr_st), key=f"v_{idx}", label_visibility="collapsed")
+                        if new_status != curr_st:
+                            df.at[idx, 'Статус'] = new_status
+                            conn.update(data=df)
+                            st.rerun()
 
                         st.markdown(f"""
                             <div style="margin-bottom: 20px;">
@@ -169,16 +149,11 @@ try:
                                 <span class="section-label">📍 {row['Раздел сайта']}</span>
                                 <span style="margin-left:15px; font-size:0.85rem; color:#86868B;">📅 С {row['Начало']}</span>
                             </div>
-                        """, unsafe_allow_html=True)
-
-                        st.markdown(f"""
                             <div style="display: flex; align-items: center; gap: 15px;">
-                                <div class="days-chip {chip_cls}">⏱ {days_count} дн.</div>
-                                <div class="progress-bg">
-                                    <div class="progress-fill {bar_cls}" style="width: {progress_pct}%;"></div>
-                                </div>
+                                <div class="days-chip {chip_c}">⏱ {days} дн.</div>
+                                <div class="progress-bg"><div class="progress-fill {bar_c}" style="width: {pct}%;"></div></div>
                             </div>
                         """, unsafe_allow_html=True)
 
 except Exception as e:
-    st.error(f"Системная ошибка: {e}")
+    st.error(f"Ошибка: {e}")
