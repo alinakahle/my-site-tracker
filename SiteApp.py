@@ -58,6 +58,10 @@ st.markdown("""
     .fill-8-14 { background: #FBBF24; }
     .fill-22plus { background: #EF4444; }
 
+    /* Индикаторы загрузки в сайдбаре */
+    .mini-bar-container { width: 100%; height: 5px; background: #E5E7EB; border-radius: 10px; margin-top: 4px; overflow: hidden; }
+    .mini-bar-fill { height: 100%; background: #9CA3AF; border-radius: 10px; }
+
     [data-testid="stMain"] div[data-testid="stSelectbox"] label { display: none !important; }
 </style>
 """, unsafe_allow_html=True)
@@ -105,6 +109,26 @@ try:
         c2.metric("⏳ План", len(df[df['Статус'] == "Запланировано"]))
         c2.metric("📦 Всего", len(df[df['Статус'] != "Архив"]))
 
+        # --- ВОССТАНОВЛЕННЫЙ БЛОК ЗАГРУЗКИ ---
+        st.markdown("---")
+        st.markdown("### ⚡ Загрузка (В работе)")
+        work_df = df[df['Статус'] == "В работе"]
+        if not work_df.empty:
+            load_data = work_df['Ответственный'].value_counts()
+            max_val = load_data.max() if not load_data.empty else 1
+            for name in staff_list:
+                count = load_data.get(name, 0)
+                pct = (count / max_val) * 100 if count > 0 else 0
+                st.markdown(f"""
+                <div style="margin-bottom: 10px;">
+                    <div style="display: flex; justify-content: space-between; font-size: 0.8rem;">
+                        <span>{STAFF_CONFIG[name]['emoji']} {name}</span>
+                        <span style="font-weight: 700;">{count}</span>
+                    </div>
+                    <div class="mini-bar-container"><div class="mini-bar-fill" style="width: {pct}%;"></div></div>
+                </div>
+                """, unsafe_allow_html=True)
+
     # --- MAIN UI ---
     st.markdown("# 🚀 разработка сайта D² DOM")
     sel_staff = st.segmented_control("Команда", options=list(STAFF_CONFIG.keys()), format_func=lambda x: f"{STAFF_CONFIG[x]['emoji']} {x}", default="Все")
@@ -127,7 +151,6 @@ try:
                 st.info(f"В этой категории пока нет задач.")
             else:
                 for idx, row in view_df.iterrows():
-                    # Расчет дней
                     try:
                         start_dt = datetime.strptime(str(row['Начало']).strip(), "%d.%m.%Y").date()
                         if curr_tab_status == "Готово" and row['Завершено']:
@@ -146,7 +169,7 @@ try:
                         with col_text:
                             st.markdown(f'<div class="task-header">{row["Задача"]}</div>', unsafe_allow_html=True)
                         with col_status:
-                            new_val = st.selectbox("Change Status", status_options, index=status_options.index(curr_tab_status), key=f"s_{idx}")
+                            new_val = st.selectbox("Status", status_options, index=status_options.index(curr_tab_status), key=f"s_{idx}")
                             if new_val != curr_tab_status:
                                 df.at[idx, 'Статус'] = new_val
                                 if new_val == "Готово": 
@@ -168,12 +191,9 @@ try:
                         </div>
                         """, unsafe_allow_html=True)
 
-                        # ЛОГИКА ОТОБРАЖЕНИЯ БАРА
                         if is_done_tab:
-                            # Только текстовая плашка для готовых
                             st.markdown(f'<div class="time-chip {chip_cls}"><span>Выполнено за <b>{days} дн.</b></span></div>', unsafe_allow_html=True)
                         elif curr_tab_status != "Архив":
-                            # Прогресс-бар для "В работе" и "Запланировано"
                             time_pct = min((days / 30) * 100, 100)
                             st.markdown(f"""
                             <div style="display: flex; align-items: center; gap: 12px; width: 100%;">
