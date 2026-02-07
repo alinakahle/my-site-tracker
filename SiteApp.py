@@ -70,9 +70,10 @@ def get_task_styles(days, is_done=False):
 try:
     df = conn.read(ttl=0).dropna(how="all").fillna("")
     if 'Завершено' not in df.columns: df['Завершено'] = ""
-    if not df.empty: df['Ответственный'] = df['Ответственный'].apply(normalize_name)
+    if not df.empty:
+        df['Ответственный'] = df['Ответственный'].apply(normalize_name)
 
-    # --- SIDEBAR (ВОССТАНОВЛЕН) ---
+    # --- SIDEBAR ---
     with st.sidebar:
         st.markdown("### ✨ Новая задача")
         with st.form("add_task", clear_on_submit=True):
@@ -124,8 +125,15 @@ try:
     for i, tab in enumerate(tabs):
         curr_status = status_map[i]
         with tab:
-            view_df = df[df['Статус'] == curr_status]
-            if sel_staff != "Все": view_df = view_df[view_df['Ответственный'] == sel_staff]
+            view_df = df[df['Статус'] == curr_status].copy()
+            if sel_staff != "Все": 
+                view_df = view_df[view_df['Ответственный'] == sel_staff]
+
+            # --- ЛОГИКА СОРТИРОВКИ ДЛЯ "ВЫПОЛНЕНО" ---
+            if curr_status == "Готово" and not view_df.empty:
+                # Превращаем строку даты в формат даты для сортировки
+                view_df['sort_dt'] = pd.to_datetime(view_df['Завершено'], format='%d.%m.%Y', errors='coerce')
+                view_df = view_df.sort_values(by='sort_dt', ascending=False)
 
             if view_df.empty:
                 st.info("Пусто")
