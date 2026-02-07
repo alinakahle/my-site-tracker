@@ -9,7 +9,7 @@ st.set_page_config(page_title="D² DOM Development", layout="wide")
 # 2. Подключение к Google Sheets
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# 3. Единая конфигурация команды (Исправлены дубли и добавлен Лёша)
+# 3. Единый стандарт команды (Используем эти ключи для сопоставления)
 STAFF_CONFIG = {
     "Программист": {"emoji": "👨‍💻", "bg": "#EBF5FF", "text": "#007AFF"},
     "Дизайнер": {"emoji": "🎨", "bg": "#FFF0F6", "text": "#D63384"},
@@ -19,11 +19,20 @@ STAFF_CONFIG = {
     "Все": {"emoji": "🌐", "bg": "#F8F9FA", "text": "#212529"}
 }
 
+# Функция для исправления имен из таблицы
+def normalize_name(name):
+    name = str(name).strip().lower()
+    if "дизайн" in name: return "Дизайнер"
+    if "лёша" in name or "леша" in name: return "Лёша"
+    if "программист" in name: return "Программист"
+    if "seo" in name: return "SEO"
+    if "алина" in name: return "Алина"
+    return "Все"
+
 # 4. Премиальный CSS
 st.markdown("""
 <style>
     .stApp { background-color: #F5F5F7 !important; }
-    
     [data-testid="stVerticalBlockBorderWrapper"] {
         background-color: white !important;
         border: 1px solid #D2D2D7 !important;
@@ -32,22 +41,14 @@ st.markdown("""
         margin-bottom: 20px !important;
         box-shadow: 0 4px 12px rgba(0,0,0,0.02) !important;
     }
-
-    .task-title { font-size: 1.5rem; font-weight: 800; color: #1D1D1F; line-height: 1.2; }
+    .task-title { font-size: 1.5rem; font-weight: 800; color: #1D1D1F; }
     .staff-badge { display: inline-flex; align-items: center; padding: 4px 12px; border-radius: 8px; font-weight: 600; font-size: 0.9rem; }
-    
-    /* Прогресс-бар */
     .progress-bg { background: #E2E8F0; border-radius: 10px; height: 10px; flex-grow: 1; overflow: hidden; }
     .progress-fill { height: 100%; border-radius: 10px; }
-    
-    /* Цвета времени */
     .t-neutral { background: #F1F5F9; color: #475569; } .b-neutral { background: #94A3B8; }
     .t-yellow { background: #FEF3C7; color: #92400E; } .b-yellow { background: #F59E0B; }
     .t-orange { background: #FFEDD5; color: #9A3412; } .b-orange { background: #F97316; }
     .t-red { background: #FEE2E2; color: #991B1B; } .b-red { background: #EF4444; }
-
-    /* Кнопка удаления */
-    .stButton button { border-radius: 8px !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -58,10 +59,11 @@ def get_time_styles(days):
     return "t-red", "b-red"
 
 try:
-    # Загрузка и нормализация данных (замена Веб-дизайнера на Дизайнера)
+    # Загрузка и ГЛУБОКАЯ ЧИСТКА данных
     df = conn.read(ttl=0).dropna(how="all").fillna("")
     if not df.empty:
-        df['Ответственный'] = df['Ответственный'].replace('Веб-дизайнер', 'Дизайнер')
+        # Применяем нормализацию ко всей колонке ответственных
+        df['Ответственный'] = df['Ответственный'].apply(normalize_name)
 
     # --- SIDEBAR ---
     with st.sidebar:
@@ -81,26 +83,22 @@ try:
                 st.rerun()
 
         st.markdown("---")
-        st.markdown("## 📊 Статистика D² DOM")
-        # Исключаем архив из статистики
+        # СТАТИСТИКА
         active_df = df[df['Статус'] != "Архив"]
-        c_work = len(active_df[active_df['Статус'] == "В работе"])
-        c_plan = len(active_df[active_df['Статус'] == "Запланировано"])
-        c_done = len(active_df[active_df['Статус'] == "Готово"])
-
+        
+        st.markdown("## 📊 Статистика D² DOM")
         with st.container(border=True):
             m1, m2 = st.columns(2)
-            m1.metric("🔥 В работе", c_work)
-            m1.metric("✅ Готово", c_done)
-            m2.metric("⏳ План", c_plan)
-            m2.metric("📦 Активных", len(active_df))
+            m1.metric("🔥 В работе", len(active_df[active_df['Статус'] == "В работе"]))
+            m1.metric("✅ Готово", len(active_df[active_df['Статус'] == "Готово"]))
+            m2.metric("⏳ План", len(active_df[active_df['Статус'] == "Запланировано"]))
+            m2.metric("📦 Всего", len(active_df))
 
-        st.markdown("### ⚡ Загрузка команды")
-        # Показываем только тех, у кого есть задачи "В работе"
+        st.markdown("### ⚡ Загрузка (Задач в работе)")
         work_counts = active_df[active_df['Статус'] == "В работе"]['Ответственный'].value_counts()
         for member in [k for k in STAFF_CONFIG.keys() if k != "Все"]:
             count = work_counts.get(member, 0)
-            st.write(f"{STAFF_CONFIG[member]['emoji']} **{member}**: {count} задач")
+            st.write(f"{STAFF_CONFIG[member]['emoji']} **{member}**: {count}")
 
     # --- MAIN UI ---
     st.markdown("# 🚀 разработка сайта D² DOM")
@@ -135,35 +133,32 @@ try:
                     pct = min((days / 30) * 100, 100)
 
                     with st.container(border=True):
-                        # Заголовок + Статус + Удаление
-                        head_1, head_2, head_3 = st.columns([0.65, 0.25, 0.1])
-                        head_1.markdown(f'<div class="task-title">{row["Задача"]}</div>', unsafe_allow_html=True)
+                        h1, h2, h3 = st.columns([0.65, 0.25, 0.1])
+                        h1.markdown(f'<div class="task-title">{row["Задача"]}</div>', unsafe_allow_html=True)
                         
                         # Выбор статуса
-                        new_status = head_2.selectbox("Статус", st_list, index=st_list.index(curr_st), key=f"s_{idx}", label_visibility="collapsed")
+                        new_status = h2.selectbox("Статус", st_list, index=st_list.index(curr_st), key=f"s_{idx}", label_visibility="collapsed")
                         if new_status != curr_st:
                             df.at[idx, 'Статус'] = new_status
                             conn.update(data=df)
                             st.rerun()
                         
-                        # Кнопка быстрой архивации (удаления)
-                        if head_3.button("🗑", key=f"del_{idx}", help="Перенести в архив"):
+                        # Архив
+                        if h3.button("🗑", key=f"del_{idx}"):
                             df.at[idx, 'Статус'] = "Архив"
                             conn.update(data=df)
                             st.rerun()
 
-                        # Инфо-строка
                         st.markdown(f"""
                             <div style="margin: 10px 0 20px 0;">
                                 <span class="staff-badge" style="background:{theme['bg']}; color:{theme['text']};">
                                     {theme['emoji']} {row['Ответственный']}
                                 </span>
-                                <span style="margin-left:15px; color:#86868B; font-weight:500;">📍 {row['Раздел сайта']}</span>
-                                <span style="margin-left:15px; font-size:0.85rem; color:#86868B;">📅 Старт: {row['Начало']}</span>
+                                <span style="margin-left:15px; color:#86868B;">📍 {row['Раздел сайта']}</span>
+                                <span style="margin-left:15px; font-size:0.85rem; color:#86868B;">📅 С {row['Начало']}</span>
                             </div>
                         """, unsafe_allow_html=True)
 
-                        # Прогресс (только для неархивных)
                         if curr_st != "Архив":
                             st.markdown(f"""
                                 <div style="display: flex; align-items: center; gap: 15px;">
@@ -173,4 +168,4 @@ try:
                             """, unsafe_allow_html=True)
 
 except Exception as e:
-    st.error(f"Ошибка данных: {e}")
+    st.error(f"Ошибка: {e}")
