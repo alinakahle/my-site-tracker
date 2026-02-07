@@ -29,57 +29,39 @@ def normalize_name(name):
     if "алин" in n: return "Алина"
     return "Все"
 
-# 4. Global CSS Optimized for Density
+# 4. Global CSS
 st.markdown("""
 <style>
     .stApp { background-color: #F8F9FA !important; }
-    
-    /* Compact Card Styling */
     [data-testid="stVerticalBlockBorderWrapper"] {
         background-color: white !important;
         border: 1px solid #E5E7EB !important;
         border-radius: 12px !important;
-        padding: 14px 18px !important; /* Reduced padding */
+        padding: 14px 18px !important;
         box-shadow: 0 1px 2px rgba(0,0,0,0.03) !important;
         margin-bottom: 0.5rem !important;
     }
-
-    /* Task Typography */
     .task-header { font-size: 1.4rem; font-weight: 800; color: #111827; line-height: 1.1; margin-bottom: 6px; }
-    
-    /* Assignee Level 2 */
     .staff-row { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
     .staff-name { font-weight: 600; font-size: 0.95rem; }
     .staff-emoji { font-size: 1.2rem; }
-    
-    /* Meta Info (High Density) */
     .meta-container { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; color: #9CA3AF; font-size: 0.75rem; opacity: 0.8; }
     .meta-divider { color: #D1D5DB; }
-
-    /* Time Badges Compact */
     .time-chip { padding: 3px 10px; border-radius: 6px; font-weight: 800; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 4px; }
     .t-0-7 { background: #F3F4F6; color: #4B5563; }
     .t-8-14 { background: #FEF3C7; color: #92400E; }
     .t-15-21 { background: #FFEDD5; color: #9A3412; }
     .t-22plus { background: #FEE2E2; color: #B91C1C; }
-
-    /* Main Progress Bar (Ultra Thin) */
     .main-progress-container { display: flex; align-items: center; gap: 12px; width: 100%; }
     .main-progress-bg { background: #F3F4F6; border-radius: 10px; height: 3px; flex-grow: 1; overflow: hidden; }
     .main-progress-fill { height: 100%; border-radius: 10px; }
-    
     .fill-0-7 { background: #D1D5DB; }
     .fill-8-14 { background: #FBBF24; }
     .fill-15-21 { background: #F97316; }
     .fill-22plus { background: #EF4444; }
-
-    /* Sidebar Analytics */
     .mini-bar-container { width: 100%; height: 5px; background: #E5E7EB; border-radius: 10px; margin-top: 4px; overflow: hidden; }
     .mini-bar-fill { height: 100%; background: #9CA3AF; border-radius: 10px; }
-
-    /* Hide selector labels & compact selectbox */
     div[data-testid="stSelectbox"] label { display: none !important; }
-    div[data-testid="stSelectbox"] > div > div { min-height: 30px !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -103,7 +85,14 @@ try:
             n_who = st.selectbox("Исполнитель", [k for k in STAFF_CONFIG.keys() if k != "Все"])
             n_date = st.date_input("Дата", value=date.today())
             if st.form_submit_button("Создать", use_container_width=True) and n_title:
-                new_row = {"Раздел сайта": n_sec, "Задача": n_title, "Ответственный": n_who, "Начало": n_date.strftime("%d.%m.%Y"), "Статус": "Запланировано"}
+                # СТАТУС ПО УМОЛЧАНИЮ: "В работе"
+                new_row = {
+                    "Раздел сайта": n_sec, 
+                    "Задача": n_title, 
+                    "Ответственный": n_who, 
+                    "Начало": n_date.strftime("%d.%m.%Y"), 
+                    "Статус": "В работе" 
+                }
                 df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
                 conn.update(data=df)
                 st.rerun()
