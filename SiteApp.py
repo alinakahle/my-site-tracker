@@ -52,9 +52,6 @@ st.markdown("""
     .t-22plus { background: #FEE2E2; color: #B91C1C; }
     .main-progress-bg { background: #F3F4F6; border-radius: 10px; height: 3px; flex-grow: 1; overflow: hidden; }
     .main-progress-fill { height: 100%; border-radius: 10px; }
-    .fill-0-7 { background: #D1D5DB; }
-    .fill-8-14 { background: #FBBF24; }
-    .fill-22plus { background: #EF4444; }
     .mini-bar-container { width: 100%; height: 5px; background: #E5E7EB; border-radius: 10px; margin-top: 4px; overflow: hidden; }
     .mini-bar-fill { height: 100%; background: #9CA3AF; border-radius: 10px; }
     [data-testid="stSelectbox"] label { display: none !important; }
@@ -73,6 +70,8 @@ try:
     if not df.empty:
         df['Ответственный'] = df['Ответственный'].apply(normalize_name)
 
+    status_options = ["В работе", "Запланировано", "Готово", "Архив"]
+
     # --- SIDEBAR ---
     with st.sidebar:
         st.markdown("### ✨ Новая задача")
@@ -89,6 +88,11 @@ try:
                 st.rerun()
 
         st.markdown("---")
+        st.markdown("### 🎯 Фильтр статуса")
+        # Добавлен выбор статуса в боковое меню
+        sel_status_side = st.selectbox("Показать статус", options=status_options, index=0)
+
+        st.markdown("---")
         st.markdown("### 📊 Статистика")
         c1, c2 = st.columns(2)
         c1.metric("🔥 Работа", len(df[df['Статус'] == "В работе"]))
@@ -97,7 +101,7 @@ try:
         c2.metric("📦 Всего", len(df[df['Статус'] != "Архив"]))
 
         st.markdown("---")
-        st.markdown("### ⚡ Загрузка")
+        st.markdown("### ⚡ Загрузка (В работе)")
         work_df = df[df['Статус'] == "В работе"]
         if not work_df.empty:
             load_data = work_df['Ответственный'].value_counts()
@@ -117,26 +121,34 @@ try:
 
     # --- MAIN UI ---
     st.markdown("# 🚀 разработка сайта D² DOM")
+    
+    # Горизонтальный выбор команды
     sel_staff = st.segmented_control("Команда", options=list(STAFF_CONFIG.keys()), format_func=lambda x: f"{STAFF_CONFIG[x]['emoji']} {x}", default="Все")
 
+    # Вкладки синхронизированы с выбором в сайдбаре для удобства
+    # Но основной контент теперь фильтруется через sel_status_side
     tabs = st.tabs(["🔥 В работе", "⏳ Очередь", "✅ Выполнено", "📁 Архив"])
-    status_map = ["В работе", "Запланировано", "Готово", "Архив"]
+    
+    # Определяем, какую вкладку открыть по умолчанию на основе выбора в сайдбаре
+    current_tab_idx = status_options.index(sel_status_side)
 
     for i, tab in enumerate(tabs):
-        curr_status = status_map[i]
+        # Отображаем контент только в той вкладке, которая соответствует выбору в сайдбаре
+        curr_status = status_options[i]
         with tab:
             view_df = df[df['Статус'] == curr_status].copy()
+            
+            # Фильтр по сотруднику
             if sel_staff != "Все": 
                 view_df = view_df[view_df['Ответственный'] == sel_staff]
 
-            # --- ЛОГИКА СОРТИРОВКИ ДЛЯ "ВЫПОЛНЕНО" ---
+            # Сортировка для выполненных
             if curr_status == "Готово" and not view_df.empty:
-                # Превращаем строку даты в формат даты для сортировки
                 view_df['sort_dt'] = pd.to_datetime(view_df['Завершено'], format='%d.%m.%Y', errors='coerce')
                 view_df = view_df.sort_values(by='sort_dt', ascending=False)
 
             if view_df.empty:
-                st.info("Пусто")
+                st.info(f"Задач со статусом '{curr_status}' не найдено")
             else:
                 for idx, row in view_df.iterrows():
                     try:
@@ -157,11 +169,14 @@ try:
                         with col_text:
                             st.markdown(f'<div class="task-header">{row["Задача"]}</div>', unsafe_allow_html=True)
                         with col_status:
-                            new_val = st.selectbox("Status", status_map, index=status_map.index(curr_status), key=f"s_{idx}")
+                            # Селект изменения статуса внутри карточки
+                            new_val = st.selectbox("Изменить статус", status_options, index=status_options.index(curr_status), key=f"s_{idx}")
                             if new_val != curr_status:
                                 df.at[idx, 'Статус'] = new_val
-                                if new_val == "Готово": df.at[idx, 'Завершено'] = date.today().strftime("%d.%m.%Y")
-                                elif new_val == "В работе": df.at[idx, 'Завершено'] = ""
+                                if new_val == "Готово": 
+                                    df.at[idx, 'Завершено'] = date.today().strftime("%d.%m.%Y")
+                                elif new_val == "В работе": 
+                                    df.at[idx, 'Завершено'] = ""
                                 conn.update(data=df)
                                 st.rerun()
 
@@ -189,4 +204,4 @@ try:
                             """, unsafe_allow_html=True)
 
 except Exception as e:
-    st.error(f"Ошибка: {e}")
+    st.error(f"Ошибка приложения: {e}")
