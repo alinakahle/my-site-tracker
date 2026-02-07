@@ -44,37 +44,32 @@ st.markdown("""
     .task-header { font-size: 1.4rem; font-weight: 800; color: #111827; line-height: 1.1; margin-bottom: 6px; }
     .staff-row { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
     .staff-name { font-weight: 600; font-size: 0.95rem; }
-    .staff-emoji { font-size: 1.2rem; }
     .meta-container { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; color: #9CA3AF; font-size: 0.75rem; opacity: 0.8; }
-    .meta-divider { color: #D1D5DB; }
     .time-chip { padding: 3px 10px; border-radius: 6px; font-weight: 800; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 4px; }
+    .t-done { background: #E7F5E9; color: #2E7D32; } /* Стиль для выполненных */
     .t-0-7 { background: #F3F4F6; color: #4B5563; }
     .t-8-14 { background: #FEF3C7; color: #92400E; }
-    .t-15-21 { background: #FFEDD5; color: #9A3412; }
     .t-22plus { background: #FEE2E2; color: #B91C1C; }
-    .main-progress-container { display: flex; align-items: center; gap: 12px; width: 100%; }
     .main-progress-bg { background: #F3F4F6; border-radius: 10px; height: 3px; flex-grow: 1; overflow: hidden; }
     .main-progress-fill { height: 100%; border-radius: 10px; }
-    .fill-0-7 { background: #D1D5DB; }
-    .fill-8-14 { background: #FBBF24; }
-    .fill-15-21 { background: #F97316; }
-    .fill-22plus { background: #EF4444; }
-    .mini-bar-container { width: 100%; height: 5px; background: #E5E7EB; border-radius: 10px; margin-top: 4px; overflow: hidden; }
-    .mini-bar-fill { height: 100%; background: #9CA3AF; border-radius: 10px; }
-    
-    /* Скрываем заголовки только у селектов внутри КАРТОЧЕК, но оставляем в ФОРМЕ */
-    [data-testid="stHorizontalBlock"] div[data-testid="stSelectbox"] label { display: none !important; }
+    .fill-done { background: #4ADE80; }
+    div[data-testid="stSelectbox"] label { display: none !important; }
 </style>
 """, unsafe_allow_html=True)
 
-def get_task_styles(days):
+def get_task_styles(days, is_done=False):
+    if is_done: return "t-done", "fill-done", "✅ "
     if days <= 7: return "t-0-7", "fill-0-7", ""
     elif days <= 14: return "t-8-14", "fill-8-14", ""
-    elif days <= 21: return "t-15-21", "fill-15-21", ""
     return "t-22plus", "fill-22plus", "🔥 "
 
 try:
     df = conn.read(ttl=0).dropna(how="all").fillna("")
+    
+    # Проверка наличия колонки для даты завершения
+    if 'Завершено' not in df.columns:
+        df['Завершено'] = ""
+
     if not df.empty:
         df['Ответственный'] = df['Ответственный'].apply(normalize_name)
 
@@ -84,62 +79,21 @@ try:
         with st.form("add_task", clear_on_submit=True):
             n_title = st.text_input("Название")
             n_sec = st.text_input("Раздел")
-            
-            # --- ВЫБОР ОТВЕТСТВЕННОГО С ЭМОДЗИ ---
             staff_list = [k for k in STAFF_CONFIG.keys() if k != "Все"]
-            n_who = st.selectbox(
-                "Ответственный", 
-                options=staff_list,
-                format_func=lambda x: f"{STAFF_CONFIG[x]['emoji']} {x}"
-            )
-            
+            n_who = st.selectbox("Ответственный", options=staff_list, format_func=lambda x: f"{STAFF_CONFIG[x]['emoji']} {x}")
             n_date = st.date_input("Дата", value=date.today())
             if st.form_submit_button("Создать", use_container_width=True) and n_title:
                 new_row = {
-                    "Раздел сайта": n_sec, 
-                    "Задача": n_title, 
-                    "Ответственный": n_who, 
-                    "Начало": n_date.strftime("%d.%m.%Y"), 
-                    "Статус": "В работе" 
+                    "Раздел сайта": n_sec, "Задача": n_title, "Ответственный": n_who,
+                    "Начало": n_date.strftime("%d.%m.%Y"), "Статус": "В работе", "Завершено": ""
                 }
                 df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
                 conn.update(data=df)
                 st.rerun()
 
-        st.markdown("---")
-        active_df = df[df['Статус'] != "Архив"]
-        st.markdown("### 📊 Статистика")
-        c1, c2 = st.columns(2)
-        c1.metric("🔥 Работа", len(active_df[active_df['Статус'] == "В работе"]))
-        c1.metric("✅ Готово", len(active_df[active_df['Статус'] == "Готово"]))
-        c2.metric("⏳ План", len(active_df[active_df['Статус'] == "Запланировано"]))
-        c2.metric("📦 Всего", len(active_df))
-
-        st.markdown("---")
-        st.markdown("### ⚡ Загрузка")
-        work_df = active_df[active_df['Статус'] == "В работе"]
-        if not work_df.empty:
-            load_data = work_df['Ответственный'].value_counts().sort_values(ascending=False)
-            max_load = load_data.max()
-            for name, count in load_data.items():
-                pct = (count / max_load) * 100
-                st.markdown(f"""
-                <div style="margin-bottom: 10px;">
-                    <div style="display: flex; justify-content: space-between; font-size: 0.8rem;">
-                        <span>{STAFF_CONFIG[name]['emoji']} {name}</span>
-                        <span style="font-weight: 700;">{count}</span>
-                    </div>
-                    <div class="mini-bar-container"><div class="mini-bar-fill" style="width: {pct}%;"></div></div>
-                </div>
-                """, unsafe_allow_html=True)
-
     # --- MAIN UI ---
     st.markdown("# 🚀 разработка сайта D² DOM")
-    
-    sel_staff = st.segmented_control(
-        "Команда", options=list(STAFF_CONFIG.keys()),
-        format_func=lambda x: f"{STAFF_CONFIG[x]['emoji']} {x}", default="Все"
-    )
+    sel_staff = st.segmented_control("Команда", options=list(STAFF_CONFIG.keys()), format_func=lambda x: f"{STAFF_CONFIG[x]['emoji']} {x}", default="Все")
 
     tabs = st.tabs(["🔥 В работе", "⏳ Очередь", "✅ Выполнено", "📁 Архив"])
     status_map = ["В работе", "Запланировано", "Готово", "Архив"]
@@ -155,14 +109,21 @@ try:
                 st.info("Пусто")
             else:
                 for idx, row in view_df.iterrows():
+                    # ЛОГИКА РАСЧЕТА ДНЕЙ
                     try:
-                        dt = datetime.strptime(str(row['Начало']).strip(), "%d.%m.%Y").date()
-                        days = (date.today() - dt).days
+                        start_dt = datetime.strptime(str(row['Начало']).strip(), "%d.%m.%Y").date()
+                        if curr_status == "Готово" and row['Завершено']:
+                            # Если готова, считаем до даты завершения
+                            end_dt = datetime.strptime(str(row['Завершено']).strip(), "%d.%m.%Y").date()
+                            days = (end_dt - start_dt).days
+                        else:
+                            # Если в работе, считаем до сегодня
+                            days = (date.today() - start_dt).days
                     except: days = 0
                     
                     role_cfg = STAFF_CONFIG.get(row['Ответственный'], STAFF_CONFIG["Все"])
-                    chip_cls, fill_cls, fire_icon = get_task_styles(days)
-                    time_pct = min((days / 30) * 100, 100)
+                    is_done = (curr_status == "Готово")
+                    chip_cls, fill_cls, fire_icon = get_task_styles(days, is_done)
 
                     with st.container(border=True):
                         col_text, col_status = st.columns([0.75, 0.25])
@@ -172,27 +133,35 @@ try:
                             new_val = st.selectbox("Status", status_map, index=status_map.index(curr_status), key=f"s_{idx}")
                             if new_val != curr_status:
                                 df.at[idx, 'Статус'] = new_val
+                                # ЕСЛИ СТАТУС СТАЛ "ГОТОВО" — ЗАПОМИНАЕМ ДАТУ
+                                if new_val == "Готово":
+                                    df.at[idx, 'Завершено'] = date.today().strftime("%d.%m.%Y")
+                                elif new_val == "В работе":
+                                    df.at[idx, 'Завершено'] = "" # Очищаем, если вернули в работу
+                                
                                 conn.update(data=df)
                                 st.rerun()
 
                         st.markdown(f"""
                         <div class="staff-row">
-                            <span class="staff-emoji">{role_cfg['emoji']}</span>
+                            <span style="font-size:1.2rem;">{role_cfg['emoji']}</span>
                             <span class="staff-name" style="color: {role_cfg['text']};">{row['Ответственный']}</span>
                         </div>
                         <div class="meta-container">
                             <span>{row['Раздел сайта']}</span>
-                            <span class="meta-divider">•</span>
-                            <span>{row['Начало']}</span>
+                            <span style="color:#D1D5DB;">•</span>
+                            <span>{row['Начало']} {f' → {row["Завершено"]}' if is_done else ''}</span>
                         </div>
                         """, unsafe_allow_html=True)
 
                         if curr_status != "Архив":
+                            label = "Сделано за:" if is_done else "В работе:"
+                            pct = 100 if is_done else min((days / 30) * 100, 100)
                             st.markdown(f"""
-                            <div class="main-progress-container">
-                                <div class="time-chip {chip_cls}">{fire_icon}{days_diff if 'days_diff' in locals() else days}д</div>
+                            <div style="display: flex; align-items: center; gap: 12px; width: 100%;">
+                                <div class="time-chip {chip_cls}">{fire_icon}{days}д</div>
                                 <div class="main-progress-bg">
-                                    <div class="main-progress-fill {fill_cls}" style="width: {time_pct}%;"></div>
+                                    <div class="main-progress-fill {fill_cls}" style="width: {pct}%;"></div>
                                 </div>
                             </div>
                             """, unsafe_allow_html=True)
