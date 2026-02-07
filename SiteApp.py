@@ -52,10 +52,8 @@ st.markdown("""
     .t-22plus { background: #FEE2E2; color: #B91C1C; }
     .main-progress-bg { background: #F3F4F6; border-radius: 10px; height: 3px; flex-grow: 1; overflow: hidden; }
     .main-progress-fill { height: 100%; border-radius: 10px; }
-    .mini-bar-container { width: 100%; height: 5px; background: #E5E7EB; border-radius: 10px; margin-top: 4px; overflow: hidden; }
-    .mini-bar-fill { height: 100%; background: #9CA3AF; border-radius: 10px; }
-    /* Скрываем заголовки только в карточках задач, оставляем в боковом меню */
-    [data-testid="stHorizontalBlock"] div[data-testid="stSelectbox"] label { display: none !important; }
+    /* Скрываем заголовки только в карточках задач (справа), но оставляем в сайдбаре */
+    [data-testid="stMain"] div[data-testid="stSelectbox"] label { display: none !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -85,17 +83,20 @@ try:
             
             n_date = st.date_input("Дата", value=date.today())
             
-            # --- ФИЛЬТР СТАТУСА ТЕПЕРЬ ТУТ (ПОСЛЕ ДАТЫ) ---
-            sel_status_side = st.selectbox("Фильтр статуса", options=status_options, index=0)
+            # ТЕПЕРЬ ЭТО УКАЗАНИЕ СТАТУСА ДЛЯ НОВОЙ ЗАДАЧИ
+            n_status = st.selectbox("Статус новой задачи", options=status_options, index=0)
             
             if st.form_submit_button("Создать", use_container_width=True) and n_title:
+                # Если сразу создаем "Готово", записываем дату завершения той же, что и дата начала
+                done_date = n_date.strftime("%d.%m.%Y") if n_status == "Готово" else ""
+                
                 new_row = {
                     "Раздел сайта": n_sec, 
                     "Задача": n_title, 
                     "Ответственный": n_who, 
                     "Начало": n_date.strftime("%d.%m.%Y"), 
-                    "Статус": "В работе", 
-                    "Завершено": ""
+                    "Статус": n_status, 
+                    "Завершено": done_date
                 }
                 df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
                 conn.update(data=df)
@@ -109,55 +110,34 @@ try:
         c2.metric("⏳ План", len(df[df['Статус'] == "Запланировано"]))
         c2.metric("📦 Всего", len(df[df['Статус'] != "Архив"]))
 
-        st.markdown("---")
-        st.markdown("### ⚡ Загрузка (В работе)")
-        work_df = df[df['Статус'] == "В работе"]
-        if not work_df.empty:
-            load_data = work_df['Ответственный'].value_counts()
-            max_val = load_data.max() if not load_data.empty else 1
-            for name in staff_list:
-                count = load_data.get(name, 0)
-                pct = (count / max_val) * 100 if count > 0 else 0
-                st.markdown(f"""
-                <div style="margin-bottom: 10px;">
-                    <div style="display: flex; justify-content: space-between; font-size: 0.8rem;">
-                        <span>{STAFF_CONFIG[name]['emoji']} {name}</span>
-                        <span style="font-weight: 700;">{count}</span>
-                    </div>
-                    <div class="mini-bar-container"><div class="mini-bar-fill" style="width: {pct}%;"></div></div>
-                </div>
-                """, unsafe_allow_html=True)
-
     # --- MAIN UI ---
     st.markdown("# 🚀 разработка сайта D² DOM")
     
     sel_staff = st.segmented_control("Команда", options=list(STAFF_CONFIG.keys()), format_func=lambda x: f"{STAFF_CONFIG[x]['emoji']} {x}", default="Все")
 
     tabs = st.tabs(["🔥 В работе", "⏳ Очередь", "✅ Выполнено", "📁 Архив"])
+    # Соответствие вкладок статусам
+    tab_status_map = ["В работе", "Запланировано", "Готово", "Архив"]
     
     for i, tab in enumerate(tabs):
-        curr_status = status_options[i]
+        curr_tab_status = tab_status_map[i]
         with tab:
-            # Если выбранная вкладка не совпадает с фильтром в сайдбаре, пишем уведомление
-            if curr_status != sel_status_side:
-                st.warning(f"⚠️ Сейчас в боковом меню выбран фильтр '{sel_status_side}'. Переключите его, чтобы увидеть задачи здесь.")
-            
-            view_df = df[df['Статус'] == curr_status].copy()
+            view_df = df[df['Статус'] == curr_tab_status].copy()
             
             if sel_staff != "Все": 
                 view_df = view_df[view_df['Ответственный'] == sel_staff]
 
-            if curr_status == "Готово" and not view_df.empty:
+            if curr_tab_status == "Готово" and not view_df.empty:
                 view_df['sort_dt'] = pd.to_datetime(view_df['Завершено'], format='%d.%m.%Y', errors='coerce')
                 view_df = view_df.sort_values(by='sort_dt', ascending=False)
 
             if view_df.empty:
-                st.info(f"Задач со статусом '{curr_status}' не найдено")
+                st.info(f"В этой категории пока нет задач.")
             else:
                 for idx, row in view_df.iterrows():
                     try:
                         start_dt = datetime.strptime(str(row['Начало']).strip(), "%d.%m.%Y").date()
-                        if curr_status == "Готово" and row['Завершено']:
+                        if curr_tab_status == "Готово" and row['Завершено']:
                             end_dt = datetime.strptime(str(row['Завершено']).strip(), "%d.%m.%Y").date()
                             days = (end_dt - start_dt).days
                         else:
@@ -165,7 +145,7 @@ try:
                     except: days = 0
                     
                     role_cfg = STAFF_CONFIG.get(row['Ответственный'], STAFF_CONFIG["Все"])
-                    is_done = (curr_status == "Готово")
+                    is_done = (curr_tab_status == "Готово")
                     chip_cls, fill_cls, fire_icon = get_task_styles(days, is_done)
 
                     with st.container(border=True):
@@ -173,8 +153,9 @@ try:
                         with col_text:
                             st.markdown(f'<div class="task-header">{row["Задача"]}</div>', unsafe_allow_html=True)
                         with col_status:
-                            new_val = st.selectbox("St", status_options, index=status_options.index(curr_status), key=f"s_{idx}")
-                            if new_val != curr_status:
+                            # Изменение статуса уже существующей задачи
+                            new_val = st.selectbox("St", status_options, index=status_options.index(curr_tab_status), key=f"s_{idx}")
+                            if new_val != curr_tab_status:
                                 df.at[idx, 'Статус'] = new_val
                                 if new_val == "Готово": 
                                     df.at[idx, 'Завершено'] = date.today().strftime("%d.%m.%Y")
@@ -195,9 +176,9 @@ try:
                         </div>
                         """, unsafe_allow_html=True)
 
-                        if curr_status == "Готово":
+                        if curr_tab_status == "Готово":
                             st.markdown(f'<div class="time-chip {chip_cls}"><span>Выполнено за <b>{days} дн.</b></span></div>', unsafe_allow_html=True)
-                        elif curr_status != "Архив":
+                        elif curr_tab_status != "Архив":
                             time_pct = min((days / 30) * 100, 100)
                             st.markdown(f"""
                             <div style="display: flex; align-items: center; gap: 12px; width: 100%;">
