@@ -61,7 +61,9 @@ st.markdown("""
     .fill-22plus { background: #EF4444; }
     .mini-bar-container { width: 100%; height: 5px; background: #E5E7EB; border-radius: 10px; margin-top: 4px; overflow: hidden; }
     .mini-bar-fill { height: 100%; background: #9CA3AF; border-radius: 10px; }
-    div[data-testid="stSelectbox"] label { display: none !important; }
+    
+    /* Скрываем заголовки только у селектов внутри КАРТОЧЕК, но оставляем в ФОРМЕ */
+    [data-testid="stHorizontalBlock"] div[data-testid="stSelectbox"] label { display: none !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -82,10 +84,17 @@ try:
         with st.form("add_task", clear_on_submit=True):
             n_title = st.text_input("Название")
             n_sec = st.text_input("Раздел")
-            n_who = st.selectbox("Исполнитель", [k for k in STAFF_CONFIG.keys() if k != "Все"])
+            
+            # --- ВЫБОР ОТВЕТСТВЕННОГО С ЭМОДЗИ ---
+            staff_list = [k for k in STAFF_CONFIG.keys() if k != "Все"]
+            n_who = st.selectbox(
+                "Ответственный", 
+                options=staff_list,
+                format_func=lambda x: f"{STAFF_CONFIG[x]['emoji']} {x}"
+            )
+            
             n_date = st.date_input("Дата", value=date.today())
             if st.form_submit_button("Создать", use_container_width=True) and n_title:
-                # СТАТУС ПО УМОЛЧАНИЮ: "В работе"
                 new_row = {
                     "Раздел сайта": n_sec, 
                     "Задача": n_title, 
@@ -147,13 +156,13 @@ try:
             else:
                 for idx, row in view_df.iterrows():
                     try:
-                        start_date = datetime.strptime(str(row['Начало']).strip(), "%d.%m.%Y").date()
-                        days_diff = (date.today() - start_date).days
-                    except: days_diff = 0
+                        dt = datetime.strptime(str(row['Начало']).strip(), "%d.%m.%Y").date()
+                        days = (date.today() - dt).days
+                    except: days = 0
                     
                     role_cfg = STAFF_CONFIG.get(row['Ответственный'], STAFF_CONFIG["Все"])
-                    chip_cls, fill_cls, fire_icon = get_task_styles(days_diff)
-                    time_pct = min((days_diff / 30) * 100, 100)
+                    chip_cls, fill_cls, fire_icon = get_task_styles(days)
+                    time_pct = min((days / 30) * 100, 100)
 
                     with st.container(border=True):
                         col_text, col_status = st.columns([0.75, 0.25])
@@ -181,7 +190,7 @@ try:
                         if curr_status != "Архив":
                             st.markdown(f"""
                             <div class="main-progress-container">
-                                <div class="time-chip {chip_cls}">{fire_icon}{days_diff}д</div>
+                                <div class="time-chip {chip_cls}">{fire_icon}{days_diff if 'days_diff' in locals() else days}д</div>
                                 <div class="main-progress-bg">
                                     <div class="main-progress-fill {fill_cls}" style="width: {time_pct}%;"></div>
                                 </div>
