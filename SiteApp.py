@@ -54,7 +54,8 @@ st.markdown("""
     .main-progress-fill { height: 100%; border-radius: 10px; }
     .mini-bar-container { width: 100%; height: 5px; background: #E5E7EB; border-radius: 10px; margin-top: 4px; overflow: hidden; }
     .mini-bar-fill { height: 100%; background: #9CA3AF; border-radius: 10px; }
-    [data-testid="stSelectbox"] label { display: none !important; }
+    /* Скрываем заголовки только в карточках задач, оставляем в боковом меню */
+    [data-testid="stHorizontalBlock"] div[data-testid="stSelectbox"] label { display: none !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -78,19 +79,27 @@ try:
         with st.form("add_task", clear_on_submit=True):
             n_title = st.text_input("Название")
             n_sec = st.text_input("Раздел")
+            
             staff_list = [k for k in STAFF_CONFIG.keys() if k != "Все"]
             n_who = st.selectbox("Ответственный", options=staff_list, format_func=lambda x: f"{STAFF_CONFIG[x]['emoji']} {x}")
+            
             n_date = st.date_input("Дата", value=date.today())
+            
+            # --- ФИЛЬТР СТАТУСА ТЕПЕРЬ ТУТ (ПОСЛЕ ДАТЫ) ---
+            sel_status_side = st.selectbox("Фильтр статуса", options=status_options, index=0)
+            
             if st.form_submit_button("Создать", use_container_width=True) and n_title:
-                new_row = {"Раздел сайта": n_sec, "Задача": n_title, "Ответственный": n_who, "Начало": n_date.strftime("%d.%m.%Y"), "Статус": "В работе", "Завершено": ""}
+                new_row = {
+                    "Раздел сайта": n_sec, 
+                    "Задача": n_title, 
+                    "Ответственный": n_who, 
+                    "Начало": n_date.strftime("%d.%m.%Y"), 
+                    "Статус": "В работе", 
+                    "Завершено": ""
+                }
                 df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
                 conn.update(data=df)
                 st.rerun()
-
-        st.markdown("---")
-        st.markdown("### 🎯 Фильтр статуса")
-        # Добавлен выбор статуса в боковое меню
-        sel_status_side = st.selectbox("Показать статус", options=status_options, index=0)
 
         st.markdown("---")
         st.markdown("### 📊 Статистика")
@@ -122,27 +131,22 @@ try:
     # --- MAIN UI ---
     st.markdown("# 🚀 разработка сайта D² DOM")
     
-    # Горизонтальный выбор команды
     sel_staff = st.segmented_control("Команда", options=list(STAFF_CONFIG.keys()), format_func=lambda x: f"{STAFF_CONFIG[x]['emoji']} {x}", default="Все")
 
-    # Вкладки синхронизированы с выбором в сайдбаре для удобства
-    # Но основной контент теперь фильтруется через sel_status_side
     tabs = st.tabs(["🔥 В работе", "⏳ Очередь", "✅ Выполнено", "📁 Архив"])
     
-    # Определяем, какую вкладку открыть по умолчанию на основе выбора в сайдбаре
-    current_tab_idx = status_options.index(sel_status_side)
-
     for i, tab in enumerate(tabs):
-        # Отображаем контент только в той вкладке, которая соответствует выбору в сайдбаре
         curr_status = status_options[i]
         with tab:
+            # Если выбранная вкладка не совпадает с фильтром в сайдбаре, пишем уведомление
+            if curr_status != sel_status_side:
+                st.warning(f"⚠️ Сейчас в боковом меню выбран фильтр '{sel_status_side}'. Переключите его, чтобы увидеть задачи здесь.")
+            
             view_df = df[df['Статус'] == curr_status].copy()
             
-            # Фильтр по сотруднику
             if sel_staff != "Все": 
                 view_df = view_df[view_df['Ответственный'] == sel_staff]
 
-            # Сортировка для выполненных
             if curr_status == "Готово" and not view_df.empty:
                 view_df['sort_dt'] = pd.to_datetime(view_df['Завершено'], format='%d.%m.%Y', errors='coerce')
                 view_df = view_df.sort_values(by='sort_dt', ascending=False)
@@ -169,8 +173,7 @@ try:
                         with col_text:
                             st.markdown(f'<div class="task-header">{row["Задача"]}</div>', unsafe_allow_html=True)
                         with col_status:
-                            # Селект изменения статуса внутри карточки
-                            new_val = st.selectbox("Изменить статус", status_options, index=status_options.index(curr_status), key=f"s_{idx}")
+                            new_val = st.selectbox("St", status_options, index=status_options.index(curr_status), key=f"s_{idx}")
                             if new_val != curr_status:
                                 df.at[idx, 'Статус'] = new_val
                                 if new_val == "Готово": 
