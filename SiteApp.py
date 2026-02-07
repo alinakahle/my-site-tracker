@@ -45,33 +45,35 @@ st.markdown("""
     .staff-row { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
     .staff-name { font-weight: 600; font-size: 0.95rem; }
     .meta-container { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; color: #9CA3AF; font-size: 0.75rem; opacity: 0.8; }
-    .time-chip { padding: 3px 10px; border-radius: 6px; font-weight: 800; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 4px; }
-    .t-done { background: #E7F5E9; color: #2E7D32; } /* Стиль для выполненных */
+    
+    /* Стили чипов времени */
+    .time-chip { padding: 4px 12px; border-radius: 6px; font-weight: 800; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 6px; }
+    .t-done { background: #DCFCE7; color: #166534; border: 1px solid #BBF7D0; }
     .t-0-7 { background: #F3F4F6; color: #4B5563; }
     .t-8-14 { background: #FEF3C7; color: #92400E; }
     .t-22plus { background: #FEE2E2; color: #B91C1C; }
+    
+    /* Прогресс-бар */
     .main-progress-bg { background: #F3F4F6; border-radius: 10px; height: 3px; flex-grow: 1; overflow: hidden; }
     .main-progress-fill { height: 100%; border-radius: 10px; }
-    .fill-done { background: #4ADE80; }
+    .fill-0-7 { background: #D1D5DB; }
+    .fill-8-14 { background: #FBBF24; }
+    .fill-22plus { background: #EF4444; }
+
     div[data-testid="stSelectbox"] label { display: none !important; }
 </style>
 """, unsafe_allow_html=True)
 
 def get_task_styles(days, is_done=False):
-    if is_done: return "t-done", "fill-done", "✅ "
+    if is_done: return "t-done", "", "✅ "
     if days <= 7: return "t-0-7", "fill-0-7", ""
     elif days <= 14: return "t-8-14", "fill-8-14", ""
     return "t-22plus", "fill-22plus", "🔥 "
 
 try:
     df = conn.read(ttl=0).dropna(how="all").fillna("")
-    
-    # Проверка наличия колонки для даты завершения
-    if 'Завершено' not in df.columns:
-        df['Завершено'] = ""
-
-    if not df.empty:
-        df['Ответственный'] = df['Ответственный'].apply(normalize_name)
+    if 'Завершено' not in df.columns: df['Завершено'] = ""
+    if not df.empty: df['Ответственный'] = df['Ответственный'].apply(normalize_name)
 
     # --- SIDEBAR ---
     with st.sidebar:
@@ -102,22 +104,18 @@ try:
         curr_status = status_map[i]
         with tab:
             view_df = df[df['Статус'] == curr_status]
-            if sel_staff != "Все":
-                view_df = view_df[view_df['Ответственный'] == sel_staff]
+            if sel_staff != "Все": view_df = view_df[view_df['Ответственный'] == sel_staff]
 
             if view_df.empty:
                 st.info("Пусто")
             else:
                 for idx, row in view_df.iterrows():
-                    # ЛОГИКА РАСЧЕТА ДНЕЙ
                     try:
                         start_dt = datetime.strptime(str(row['Начало']).strip(), "%d.%m.%Y").date()
                         if curr_status == "Готово" and row['Завершено']:
-                            # Если готова, считаем до даты завершения
                             end_dt = datetime.strptime(str(row['Завершено']).strip(), "%d.%m.%Y").date()
                             days = (end_dt - start_dt).days
                         else:
-                            # Если в работе, считаем до сегодня
                             days = (date.today() - start_dt).days
                     except: days = 0
                     
@@ -133,12 +131,10 @@ try:
                             new_val = st.selectbox("Status", status_map, index=status_map.index(curr_status), key=f"s_{idx}")
                             if new_val != curr_status:
                                 df.at[idx, 'Статус'] = new_val
-                                # ЕСЛИ СТАТУС СТАЛ "ГОТОВО" — ЗАПОМИНАЕМ ДАТУ
                                 if new_val == "Готово":
                                     df.at[idx, 'Завершено'] = date.today().strftime("%d.%m.%Y")
                                 elif new_val == "В работе":
-                                    df.at[idx, 'Завершено'] = "" # Очищаем, если вернули в работу
-                                
+                                    df.at[idx, 'Завершено'] = ""
                                 conn.update(data=df)
                                 st.rerun()
 
@@ -154,14 +150,21 @@ try:
                         </div>
                         """, unsafe_allow_html=True)
 
-                        if curr_status != "Архив":
-                            label = "Сделано за:" if is_done else "В работе:"
-                            pct = 100 if is_done else min((days / 30) * 100, 100)
+                        if curr_status == "Готово":
+                            # УБРАН БАР, ОСТАВЛЕН ТОЛЬКО ТЕКСТОВЫЙ ЧИП
+                            st.markdown(f"""
+                            <div class="time-chip {chip_cls}">
+                                <span>Выполнено за <b>{days} дн.</b></span>
+                            </div>
+                            """, unsafe_allow_html=True)
+                        elif curr_status != "Архив":
+                            # БАР ОСТАЕТСЯ ТОЛЬКО ДЛЯ АКТИВНЫХ ЗАДАЧ
+                            time_pct = min((days / 30) * 100, 100)
                             st.markdown(f"""
                             <div style="display: flex; align-items: center; gap: 12px; width: 100%;">
                                 <div class="time-chip {chip_cls}">{fire_icon}{days}д</div>
                                 <div class="main-progress-bg">
-                                    <div class="main-progress-fill {fill_cls}" style="width: {pct}%;"></div>
+                                    <div class="main-progress-fill {fill_cls}" style="width: {time_pct}%;"></div>
                                 </div>
                             </div>
                             """, unsafe_allow_html=True)
