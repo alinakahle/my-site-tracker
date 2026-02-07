@@ -45,14 +45,19 @@ st.markdown("""
     .staff-row { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
     .staff-name { font-weight: 600; font-size: 0.95rem; }
     .meta-container { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; color: #9CA3AF; font-size: 0.75rem; opacity: 0.8; }
+    
     .time-chip { padding: 4px 12px; border-radius: 6px; font-weight: 800; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 6px; }
     .t-done { background: #DCFCE7; color: #166534; border: 1px solid #BBF7D0; }
     .t-0-7 { background: #F3F4F6; color: #4B5563; }
     .t-8-14 { background: #FEF3C7; color: #92400E; }
     .t-22plus { background: #FEE2E2; color: #B91C1C; }
-    .main-progress-bg { background: #F3F4F6; border-radius: 10px; height: 3px; flex-grow: 1; overflow: hidden; }
+    
+    .main-progress-bg { background: #F3F4F6; border-radius: 10px; height: 6px; flex-grow: 1; overflow: hidden; margin-top: 4px; }
     .main-progress-fill { height: 100%; border-radius: 10px; }
-    /* Скрываем заголовки только в карточках задач (справа), но оставляем в сайдбаре */
+    .fill-0-7 { background: #D1D5DB; }
+    .fill-8-14 { background: #FBBF24; }
+    .fill-22plus { background: #EF4444; }
+
     [data-testid="stMain"] div[data-testid="stSelectbox"] label { display: none !important; }
 </style>
 """, unsafe_allow_html=True)
@@ -77,26 +82,16 @@ try:
         with st.form("add_task", clear_on_submit=True):
             n_title = st.text_input("Название")
             n_sec = st.text_input("Раздел")
-            
             staff_list = [k for k in STAFF_CONFIG.keys() if k != "Все"]
             n_who = st.selectbox("Ответственный", options=staff_list, format_func=lambda x: f"{STAFF_CONFIG[x]['emoji']} {x}")
-            
             n_date = st.date_input("Дата", value=date.today())
-            
-            # ТЕПЕРЬ ЭТО УКАЗАНИЕ СТАТУСА ДЛЯ НОВОЙ ЗАДАЧИ
             n_status = st.selectbox("Статус новой задачи", options=status_options, index=0)
             
             if st.form_submit_button("Создать", use_container_width=True) and n_title:
-                # Если сразу создаем "Готово", записываем дату завершения той же, что и дата начала
                 done_date = n_date.strftime("%d.%m.%Y") if n_status == "Готово" else ""
-                
                 new_row = {
-                    "Раздел сайта": n_sec, 
-                    "Задача": n_title, 
-                    "Ответственный": n_who, 
-                    "Начало": n_date.strftime("%d.%m.%Y"), 
-                    "Статус": n_status, 
-                    "Завершено": done_date
+                    "Раздел сайта": n_sec, "Задача": n_title, "Ответственный": n_who, 
+                    "Начало": n_date.strftime("%d.%m.%Y"), "Статус": n_status, "Завершено": done_date
                 }
                 df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
                 conn.update(data=df)
@@ -112,18 +107,15 @@ try:
 
     # --- MAIN UI ---
     st.markdown("# 🚀 разработка сайта D² DOM")
-    
     sel_staff = st.segmented_control("Команда", options=list(STAFF_CONFIG.keys()), format_func=lambda x: f"{STAFF_CONFIG[x]['emoji']} {x}", default="Все")
 
     tabs = st.tabs(["🔥 В работе", "⏳ Очередь", "✅ Выполнено", "📁 Архив"])
-    # Соответствие вкладок статусам
     tab_status_map = ["В работе", "Запланировано", "Готово", "Архив"]
     
     for i, tab in enumerate(tabs):
         curr_tab_status = tab_status_map[i]
         with tab:
             view_df = df[df['Статус'] == curr_tab_status].copy()
-            
             if sel_staff != "Все": 
                 view_df = view_df[view_df['Ответственный'] == sel_staff]
 
@@ -135,6 +127,7 @@ try:
                 st.info(f"В этой категории пока нет задач.")
             else:
                 for idx, row in view_df.iterrows():
+                    # Расчет дней
                     try:
                         start_dt = datetime.strptime(str(row['Начало']).strip(), "%d.%m.%Y").date()
                         if curr_tab_status == "Готово" and row['Завершено']:
@@ -145,16 +138,15 @@ try:
                     except: days = 0
                     
                     role_cfg = STAFF_CONFIG.get(row['Ответственный'], STAFF_CONFIG["Все"])
-                    is_done = (curr_tab_status == "Готово")
-                    chip_cls, fill_cls, fire_icon = get_task_styles(days, is_done)
+                    is_done_tab = (curr_tab_status == "Готово")
+                    chip_cls, fill_cls, fire_icon = get_task_styles(days, is_done_tab)
 
                     with st.container(border=True):
                         col_text, col_status = st.columns([0.75, 0.25])
                         with col_text:
                             st.markdown(f'<div class="task-header">{row["Задача"]}</div>', unsafe_allow_html=True)
                         with col_status:
-                            # Изменение статуса уже существующей задачи
-                            new_val = st.selectbox("St", status_options, index=status_options.index(curr_tab_status), key=f"s_{idx}")
+                            new_val = st.selectbox("Change Status", status_options, index=status_options.index(curr_tab_status), key=f"s_{idx}")
                             if new_val != curr_tab_status:
                                 df.at[idx, 'Статус'] = new_val
                                 if new_val == "Готово": 
@@ -172,18 +164,23 @@ try:
                         <div class="meta-container">
                             <span>{row['Раздел сайта']}</span>
                             <span style="color:#D1D5DB;">•</span>
-                            <span>{row['Начало']} {f' → {row["Завершено"]}' if is_done else ''}</span>
+                            <span>{row['Начало']} {f' → {row["Завершено"]}' if is_done_tab else ''}</span>
                         </div>
                         """, unsafe_allow_html=True)
 
-                        if curr_tab_status == "Готово":
+                        # ЛОГИКА ОТОБРАЖЕНИЯ БАРА
+                        if is_done_tab:
+                            # Только текстовая плашка для готовых
                             st.markdown(f'<div class="time-chip {chip_cls}"><span>Выполнено за <b>{days} дн.</b></span></div>', unsafe_allow_html=True)
                         elif curr_tab_status != "Архив":
+                            # Прогресс-бар для "В работе" и "Запланировано"
                             time_pct = min((days / 30) * 100, 100)
                             st.markdown(f"""
                             <div style="display: flex; align-items: center; gap: 12px; width: 100%;">
                                 <div class="time-chip {chip_cls}">{fire_icon}{days}д</div>
-                                <div class="main-progress-bg"><div class="main-progress-fill {fill_cls}" style="width: {time_pct}%;"></div></div>
+                                <div class="main-progress-bg">
+                                    <div class="main-progress-fill {fill_cls}" style="width: {time_pct}%;"></div>
+                                </div>
                             </div>
                             """, unsafe_allow_html=True)
 
